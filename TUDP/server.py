@@ -1,30 +1,20 @@
 import socket
 
-# config
-localIP = "127.0.0.1"
-localPort = 12345
-bufferSize = 1024
-msgFromServer = "Hello Client"
-bytesToSend = str.encode(msgFromServer)
+local_IP = "127.0.0.1"
+local_port = 12345
+buffer_size = 1024
 
-# socket -- server side
-UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-
-# Bind to address and ip
-UDPServerSocket.bind((localIP, localPort))
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+server_socket.bind((local_IP, local_port))
 print("server up")
 
-# Listen for incoming datagrams
 while True:
-    bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
-    message = bytesAddressPair[0]
-    address = bytesAddressPair[1]
-
-    clientMsg = "Message from Client:{}".format(message)
-    clientIP = "Client IP Address:{}".format(address)
-
-    print(clientMsg)
-    print(clientIP)
-
-    # replying to client
-    UDPServerSocket.sendto(bytesToSend, address)
+    try:
+        message, address = server_socket.recvfrom(buffer_size)
+        if address[0] == local_IP and address[1] == local_port:
+            continue  # Ignore our own broadcasts
+        print(f"Received from {address}: {message.decode()}")
+        server_socket.sendto(message, ('<broadcast>', local_port))  # System broadcast
+    except OSError as e:
+        print(f"Error: {e}")
