@@ -1,14 +1,14 @@
 import socket
 import threading
-import datetime
 import time
+from datetime import datetime
 
 # config
 local_IP = "0.0.0.0"
 local_port = 12345
 buffer_size = 1024
 
-# track clients
+# track clients: {port:(ip, last_active)}
 clients = {}
 
 def cleanup_clients(): # remove clients if inactive for 30s
@@ -16,12 +16,12 @@ def cleanup_clients(): # remove clients if inactive for 30s
         time.sleep(30)
         current_time = time.time()
         inactive_clients = [
-            port for client_port, last_active in clients.items() # all the ports for clients
+            port for port, (ip, last_active) in clients.items()
             if current_time - last_active > 60 # 60 second timeout
         ]
         for port in inactive_clients:
             del clients[port]
-            print(f"removed client {port}")
+            print(f"Removed inactive client @ {port}")
 
 # start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_clients)
@@ -37,20 +37,39 @@ print("Server up")
 # main loop
 while True:
     try:
-        message, address = server_socket.recvfrom(buffer_size)
-        print(f"Received from {address} @ {datetime.datetime.now()}: {message.decode()}") # chat logs
+        # receiving logs
+        message, (client_ip, client_port) = server_socket.recvfrom(buffer_size)
+        message_str = message.decode()
+
+        # formatting time for chat logs
+        time_format = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
         # update client activity
-        client_port = address[1]
-        clients[client_port] = time.time()
+        clients[client_port] = (client_ip, time.time())
 
-        # broadcast to all clients except sender
-        for port in list(clients.keys()):
+        # new connections
+        if "connected @" in message_str:
+            print(f"Client @ {client_ip}:{client_port} connected")
+
+            # broadcast to all clients
+            join_msg = f"[Server] {client_ip}:{client_port} joined"
+            for port, (ip, _) in list(clients.items()):
+                if port != client_port:
+                    try:
+                        server_socket.sendto(join_msg.encode(), (ip, port))
+                    except socket.error: # if error occurs, delete port from list of clients
+                        del clients[port]
+            continue
+
+        # other messages
+        print(f"{client_ip}:{client_port} @ {time_format}> {message_str}") # for logs
+        broadcast_msg = f"{client_port} @ {time_format}> {message_str}" # for all clients
+
+        for port, (ip, _) in list(clients.items()):
             if port != client_port:
                 try:
-                    server_socket.sendto(message, ('255.255.255.255', port))
-                except socket.error as e:
-                    print(f"error sending to port: {e}")
-                    del clients[port] # remove failed clients
+                    server_socket.sendto(broadcast_msg.encode(), (ip, port)) # broadcast to all clients except self
+                except socket.error:
+                    del clients[port]
     except OSError as e:
         print(f"Error: {e}")
