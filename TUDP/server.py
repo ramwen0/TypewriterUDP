@@ -13,11 +13,11 @@ clients = {}
 
 def cleanup_clients(): # remove clients if inactive for 30s
     while True:
-        time.sleep(30)
+        time.sleep(120)
         current_time = time.time()
         inactive_clients = [
             port for port, (ip, last_active) in clients.items()
-            if current_time - last_active > 60 # 60 second timeout
+            if current_time - last_active > 240 # 60 second timeout
         ]
         for port in inactive_clients:
             del clients[port]
@@ -42,7 +42,7 @@ while True:
         message_str = message.decode()
 
         # formatting time for chat logs
-        time_format = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        time_format = datetime.now().strftime("%d-%m-%Y %H:%M")
 
         # update client activity
         clients[client_port] = (client_ip, time.time())

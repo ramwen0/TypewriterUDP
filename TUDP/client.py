@@ -24,9 +24,9 @@ def receive_message():
 
             # server messages
             if message.startswith("SERVER"):
-                print(f"\n[Server] {message[7:]}\n> ", end="")
+                print(f"[Server] {message[7:]}\n> ", end="")
             else:
-                print(f"\n{message}\n> ", end="")
+                print(f"{message}\n> ", end="")
         except socket.error:
             pass
 
