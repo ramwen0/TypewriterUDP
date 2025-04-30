@@ -49,6 +49,15 @@ while True:
             server_socket.sendto(welcome_msg.encode(), (client_ip, client_port))
             continue
 
+        if message_str.startswith("typing:"):
+            with clients_lock:
+                for port, (ip, _) in list(clients.items()):
+                    if port != client_port:
+                        try:
+                            server_socket.sendto(message_str.encode(), (ip, port))
+                        except socket.error:
+                            del clients[port]
+
         # Broadcast regular messages with sender info
         broadcast_msg = f"{client_port}> {message_str}"
         print(f"{Colors.GREEN}{Colors.BG_DARK}Broadcasting: {broadcast_msg}{Colors.END}")

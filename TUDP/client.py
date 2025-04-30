@@ -106,9 +106,13 @@ class DarkChatApp:
         self.chat_display.tag_config('message', foreground=self.text_fg, font=('Helvetica', 10))
         self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
 
+
         # Input area
         input_frame = ttk.Frame(main_frame, style='Dark.TFrame')
         input_frame.pack(fill=tk.X, pady=(10, 0))
+
+        self.typing_label = ttk.Label(input_frame, text="", style='Dark.TFrame', foreground="#888888")
+        self.typing_label.pack(side=tk.LEFT, padx=(0, 10))
 
         self.message_entry = ttk.Entry(
             input_frame,
@@ -116,6 +120,7 @@ class DarkChatApp:
             style='Dark.TEntry'
         )
         self.message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.message_entry.bind('<KeyRelease>', self.on_typing)
         self.message_entry.bind('<Return>', self.send_message)
 
     def receive_messages(self):
@@ -129,6 +134,10 @@ class DarkChatApp:
                 if message.startswith("[Server]"):
                     self.display_message("Server", message[9:], datetime.now().strftime("%H:%M"))
                 # Regular chat messages
+                elif message.startswith("typing:"):
+                    partial_text = message[7:]
+                    self.show_typing_text(address[1], partial_text)
+                    continue
                 else:
                     if ">" in message:
                         sender, content = message.split(">", 1)
@@ -139,6 +148,9 @@ class DarkChatApp:
             except socket.error:
                 if self.running:
                     self.display_message("System", "Connection error", datetime.now().strftime("%H:%M"))
+
+    def show_typing_text(self, sendr_port, text):
+        self.typing_label.config(text=f"{sendr_port} is typing: {text}")
 
     def display_message(self, sender, message, timestamp):
         """Display a message in the chat window"""
@@ -171,6 +183,12 @@ class DarkChatApp:
         self.client_socket.close()
         self.root.destroy()
 
+    def on_typing(self, event=None):
+        text = self.message_entry.get()
+        # Envia apenas se existir texto
+        if text:
+            typing_msg = f"typing:{text}"
+            self.client_socket.sendto(typing_msg.encode(), self.server_address)
 
 if __name__ == "__main__":
     root = tk.Tk()
