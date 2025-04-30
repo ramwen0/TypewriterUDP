@@ -1,75 +1,65 @@
+# server.py (with dark console colors)
 import socket
 import threading
 import time
 from datetime import datetime
 
-# config
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    END = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    BG_DARK = '\033[48;5;234m'  # Dark background
+    TEXT_LIGHT = '\033[38;5;250m'  # Light text
+
+
+# Config
 local_IP = "0.0.0.0"
 local_port = 12345
 buffer_size = 1024
 
-# track clients: {port:(ip, last_active)}
+# Track clients: {port: (ip, last_active)}
 clients = {}
+clients_lock = threading.Lock()
 
-def cleanup_clients(): # remove clients if inactive for 30s
-    while True:
-        time.sleep(120)
-        current_time = time.time()
-        inactive_clients = [
-            port for port, (ip, last_active) in clients.items()
-            if current_time - last_active > 240 # 60 second timeout
-        ]
-        for port in inactive_clients:
-            del clients[port]
-            print(f"Removed inactive client @ {port}")
-
-# start cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_clients)
-cleanup_thread.daemon = True
-cleanup_thread.start()
-
-# socket initialization
+# server setup
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 server_socket.bind((local_IP, local_port))
-print("Server up")
+print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 
-# main loop
 while True:
     try:
-        # receiving logs
         message, (client_ip, client_port) = server_socket.recvfrom(buffer_size)
         message_str = message.decode()
 
-        # formatting time for chat logs
-        time_format = datetime.now().strftime("%d-%m-%Y %H:%M")
+        # Update client activity
+        with clients_lock:
+            clients[client_port] = (client_ip, time.time())
 
-        # update client activity
-        clients[client_port] = (client_ip, time.time())
+        # Handle connection messages
+        if message_str.startswith("connected @"):
+            print(f"{Colors.BLUE}{Colors.BG_DARK}New connection: {client_ip}:{client_port}{Colors.END}")
+            welcome_msg = f"[Server] Connected as {client_ip}:{client_port}"
+            server_socket.sendto(welcome_msg.encode(), (client_ip, client_port))
+            continue
 
-        # new connections
-        if "connected @" in message_str:
-            print(f"Client @ {client_ip}:{client_port} connected")
+        # Broadcast regular messages with sender info
+        broadcast_msg = f"{client_port}> {message_str}"
+        print(f"{Colors.GREEN}{Colors.BG_DARK}Broadcasting: {broadcast_msg}{Colors.END}")
 
-            # broadcast to all clients
-            join_msg = f"[Server] {client_ip}:{client_port} joined"
+        with clients_lock:
             for port, (ip, _) in list(clients.items()):
                 if port != client_port:
                     try:
-                        server_socket.sendto(join_msg.encode(), (ip, port))
-                    except socket.error: # if error occurs, delete port from list of clients
+                        server_socket.sendto(broadcast_msg.encode(), (ip, port))
+                    except socket.error:
                         del clients[port]
-            continue
 
-        # other messages
-        print(f"{client_ip}:{client_port} @ {time_format}> {message_str}") # for logs
-        broadcast_msg = f"{client_port} @ {time_format}> {message_str}" # for all clients
-
-        for port, (ip, _) in list(clients.items()):
-            if port != client_port:
-                try:
-                    server_socket.sendto(broadcast_msg.encode(), (ip, port)) # broadcast to all clients except self
-                except socket.error:
-                    del clients[port]
     except OSError as e:
-        print(f"Error: {e}")
+        print(f"{Colors.FAIL}{Colors.BG_DARK}Error: {e}{Colors.END}")
