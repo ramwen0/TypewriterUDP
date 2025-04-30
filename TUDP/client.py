@@ -7,8 +7,9 @@ from datetime import datetime
 class DarkChatApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Dark UDP Chat")
-        self.root.geometry("600x500")
+        self.root.title("Typewriter UDP Client")
+        self.root.geometry("550x450")
+        self.root.iconbitmap("icon.ico")
         self.setup_dark_theme()
 
         # Network setup
@@ -45,17 +46,6 @@ class DarkChatApp:
         # Frame style
         style.configure('Dark.TFrame', background=self.bg_color)
 
-        # Button style
-        style.configure('Dark.TButton',
-                        background=self.accent_color,
-                        foreground="white",
-                        bordercolor=self.accent_color,
-                        darkcolor=self.accent_color,
-                        lightcolor=self.accent_color,
-                        focuscolor=self.bg_color)
-        style.map('Dark.TButton',
-                  background=[('active', '#3a7bd5')])
-
         # Entry style
         style.configure('Dark.TEntry',
                         fieldbackground=self.entry_bg,
@@ -81,11 +71,16 @@ class DarkChatApp:
         main_frame = ttk.Frame(self.root, style='Dark.TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        # Create a horizontal paned window to separate chat and client list
+        paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        paned_window.pack(fill=tk.BOTH, expand=True)
+
         # Chat display area
+        chat_frame = ttk.Frame(paned_window, style='Dark.TFrame')
         self.chat_display = scrolledtext.ScrolledText(
-            main_frame,
+            chat_frame,
             wrap=tk.WORD,
-            width=60,
+            width=50,
             height=20,
             font=('Helvetica', 10),
             padx=10,
@@ -99,6 +94,32 @@ class DarkChatApp:
             relief=tk.FLAT
         )
         self.chat_display.pack(fill=tk.BOTH, expand=True)
+        paned_window.add(chat_frame, weight=3)
+
+        # Client list area
+        client_frame = ttk.Frame(paned_window, style='Dark.TFrame', width=150)
+        client_frame.pack_propagate(False)  # Prevent frame from resizing to contents
+
+        # Client list title
+        ttk.Label(client_frame,
+                  text="Connected Clients",
+                  style='Dark.TFrame',
+                  font=('Helvetica', 10, 'bold'),
+                  foreground=self.accent_color).pack(pady=(0, 5))
+
+        # Client list display
+        self.client_listbox = tk.Listbox(
+            client_frame,
+            bg=self.entry_bg,
+            fg=self.text_fg,
+            selectbackground=self.accent_color,
+            selectforeground="white",
+            font=('Helvetica', 9),
+            relief=tk.FLAT,
+            highlightthickness=0
+        )
+        self.client_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        paned_window.add(client_frame, weight=1)
 
         # Configure text tags for styling
         self.chat_display.tag_config('username', foreground=self.accent_color, font=('Helvetica', 10, 'bold'))
@@ -106,8 +127,7 @@ class DarkChatApp:
         self.chat_display.tag_config('message', foreground=self.text_fg, font=('Helvetica', 10))
         self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
 
-
-        # Input area
+        # input area
         input_frame = ttk.Frame(main_frame, style='Dark.TFrame')
         input_frame.pack(fill=tk.X, pady=(10, 0))
 
@@ -122,6 +142,12 @@ class DarkChatApp:
         self.message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.message_entry.bind('<KeyRelease>', self.on_typing)
         self.message_entry.bind('<Return>', self.send_message)
+
+    def update_client_list(self, clients):
+        """Update the connected clients listbox"""
+        self.client_listbox.delete(0, tk.END)
+        for client in sorted(clients):
+            self.client_listbox.insert(tk.END, f"Port {client}")
 
     def receive_messages(self):
         """Thread function to receive incoming messages"""

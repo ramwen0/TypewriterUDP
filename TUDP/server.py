@@ -33,6 +33,15 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 server_socket.bind((local_IP, local_port))
 print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 
+def broadcast(text):
+    with clients_lock:
+        for port, (ip, _) in list(clients.items()):
+            if port != client_port:
+                try:
+                    server_socket.sendto(text.encode(), (ip, port))
+                except socket.error:
+                    del clients[port]
+
 while True:
     try:
         message, (client_ip, client_port) = server_socket.recvfrom(buffer_size)
@@ -45,30 +54,22 @@ while True:
         # Handle connection messages
         if message_str.startswith("connected @"):
             print(f"{Colors.BLUE}{Colors.BG_DARK}New connection: {client_ip}:{client_port}{Colors.END}")
-            welcome_msg = f"[Server] Connected as {client_ip}:{client_port}"
-            server_socket.sendto(welcome_msg.encode(), (client_ip, client_port))
+            # send to connected client
+            welcome = f"[Server] Connected as {client_ip}:{client_port}"
+            server_socket.sendto(welcome.encode(), (client_ip, client_port))
+            # broadcast to other clients
+            welcome_broadcast = welcome = f"[Server] {client_port} joined"
+            broadcast(welcome_broadcast)
             continue
 
+        # Handle typing
         if message_str.startswith("typing:"):
-            with clients_lock:
-                for port, (ip, _) in list(clients.items()):
-                    if port != client_port:
-                        try:
-                            server_socket.sendto(message_str.encode(), (ip, port))
-                        except socket.error:
-                            del clients[port]
+            broadcast(message_str)
 
         # Broadcast regular messages with sender info
         broadcast_msg = f"{client_port}> {message_str}"
         print(f"{Colors.GREEN}{Colors.BG_DARK}Broadcasting: {broadcast_msg}{Colors.END}")
-
-        with clients_lock:
-            for port, (ip, _) in list(clients.items()):
-                if port != client_port:
-                    try:
-                        server_socket.sendto(broadcast_msg.encode(), (ip, port))
-                    except socket.error:
-                        del clients[port]
+        broadcast(broadcast_msg)
 
     except OSError as e:
         print(f"{Colors.FAIL}{Colors.BG_DARK}Error: {e}{Colors.END}")
