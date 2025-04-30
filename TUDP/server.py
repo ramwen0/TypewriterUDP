@@ -1,9 +1,6 @@
-# server.py (with dark console colors)
 import socket
 import threading
 import time
-from datetime import datetime
-
 
 class Colors:
     HEADER = '\033[95m'
@@ -19,7 +16,7 @@ class Colors:
 
 
 # Config
-local_IP = "0.0.0.0"
+local_IP = "127.0.0.1"
 local_port = 12345
 buffer_size = 1024
 
@@ -47,19 +44,18 @@ while True:
         message, (client_ip, client_port) = server_socket.recvfrom(buffer_size)
         message_str = message.decode()
 
-        # Update client activity
-        with clients_lock:
-            clients[client_port] = (client_ip, time.time())
-
         # Handle connection messages
         if message_str.startswith("connected @"):
             print(f"{Colors.BLUE}{Colors.BG_DARK}New connection: {client_ip}:{client_port}{Colors.END}")
-            # send to connected client
-            welcome = f"[Server] Connected as {client_ip}:{client_port}"
+            # Add new client to dictionary first
+            with clients_lock:
+                clients[client_port] = (client_ip, time.time())
+                client_list = ",".join(str(port) for port in clients.keys())
+            # Send welcome message WITH full client list to new client
+            welcome = f"[Server] Connected as {client_ip}:{client_port}\n[Server] CLIENTS:{client_list}"
             server_socket.sendto(welcome.encode(), (client_ip, client_port))
-            # broadcast to other clients
-            welcome_broadcast = welcome = f"[Server] {client_port} joined"
-            broadcast(welcome_broadcast)
+            # Broadcast updated list to all OTHER clients
+            broadcast(f"[Server] {client_port} joined\n[Server] CLIENTS:{client_list}")
             continue
 
         # Handle typing
@@ -68,7 +64,7 @@ while True:
 
         # Broadcast regular messages with sender info
         broadcast_msg = f"{client_port}> {message_str}"
-        print(f"{Colors.GREEN}{Colors.BG_DARK}Broadcasting: {broadcast_msg}{Colors.END}")
+        print(f"{Colors.GREEN}{Colors.BG_DARK}{broadcast_msg}{Colors.END}")
         broadcast(broadcast_msg)
 
     except OSError as e:

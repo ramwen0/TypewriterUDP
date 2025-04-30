@@ -9,16 +9,13 @@ class DarkChatApp:
         self.root = root
         self.root.title("Typewriter UDP Client")
         self.root.geometry("550x450")
-        self.root.iconbitmap("icon.ico")
+        #self.root.iconbitmap("icon.ico")
         self.setup_dark_theme()
 
         # Network setup
         self.server_address = ("127.0.0.1", 12345)
         self.buffer_size = 1024
         self.setup_network()
-
-        # UI setup
-        self.setup_ui()
 
         # Start message receiver thread
         self.running = True
@@ -55,17 +52,7 @@ class DarkChatApp:
                         lightcolor="#444",
                         darkcolor="#444")
 
-    def setup_network(self):
-        """Initialize the UDP socket"""
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.client_socket.bind(('0.0.0.0', 0))  # Bind to random available port
-
-        # Send connection notification
-        hello_msg = f"connected @{self.client_socket.getsockname()[1]}"
-        self.client_socket.sendto(hello_msg.encode(), self.server_address)
-
-    def setup_ui(self):
+    def setup_ui(self, initial_port=None):
         """Create the user interface"""
         # Main container
         main_frame = ttk.Frame(self.root, style='Dark.TFrame')
@@ -143,22 +130,41 @@ class DarkChatApp:
         self.message_entry.bind('<KeyRelease>', self.on_typing)
         self.message_entry.bind('<Return>', self.send_message)
 
-    def update_client_list(self, clients):
-        """Update the connected clients listbox"""
-        self.client_listbox.delete(0, tk.END)
-        for client in sorted(clients):
-            self.client_listbox.insert(tk.END, f"Port {client}")
+        if initial_port:
+            self.client_listbox.insert(tk.END, f" Client {initial_port}")
+
+    def setup_network(self):
+        """Initialize the UDP socket"""
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.client_socket.bind(('0.0.0.0', 0))  # Bind to random available port
+
+        # Send connection notification
+        port = self.client_socket.getsockname()[1]
+        self.setup_ui(initial_port=port)
+        hello_msg = f"connected @{port}"
+        self.client_socket.sendto(hello_msg.encode(), self.server_address)
 
     def receive_messages(self):
-        """Thread function to receive incoming messages"""
         while self.running:
             try:
                 data, address = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
 
-                # Server messages (connection acknowledgments)
+                # Handle multi-part server messages
                 if message.startswith("[Server]"):
-                    self.display_message("Server", message[9:], datetime.now().strftime("%H:%M"))
+                    for msg_part in message.split("\n"):
+                        if msg_part.startswith("[Server]"):
+                            content = msg_part[9:]
+
+                            if "CLIENTS:" in content:
+                                self.client_listbox.delete(0, tk.END)
+                                ports = content.split("CLIENTS:")[1].split(",")
+                                for port in ports:
+                                    if port:  # Skip empty
+                                        self.client_listbox.insert(tk.END, f"Client {port}")
+                            else:
+                                self.display_message("Server", content, datetime.now().strftime("%H:%M"))
                 # Regular chat messages
                 elif message.startswith("typing:"):
                     partial_text = message[7:]
@@ -181,7 +187,6 @@ class DarkChatApp:
     def display_message(self, sender, message, timestamp):
         """Display a message in the chat window"""
         self.chat_display.config(state='normal')
-
         if sender == "Server":
             self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
         else:
