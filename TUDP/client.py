@@ -210,13 +210,21 @@ class DarkChatApp:
 
     def on_closing(self):
         """Clean up when window closes"""
+        # Send disconnect message to server
+        port = self.client_socket.getsockname()[1]
+        disconnect_msg = f"disconnect @{port}"
+        try:
+            self.client_socket.sendto(disconnect_msg.encode(), self.server_address)
+        except socket.error:
+            pass
+        # Close socket and exit
         self.running = False
         self.client_socket.close()
         self.root.destroy()
 
     def on_typing(self, event=None):
         text = self.message_entry.get()
-        # Envia apenas se existir texto
+        # Send only if exists text
         if text:
             typing_msg = f"typing:{text}"
             self.client_socket.sendto(typing_msg.encode(), self.server_address)

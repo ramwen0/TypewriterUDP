@@ -30,14 +30,18 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 server_socket.bind((local_IP, local_port))
 print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 
-def broadcast(text):
+def broadcast(text, exclude=None):
+    """Send `text` to all clients, except the one with `exclude` port"""
     with clients_lock:
         for port, (ip, _) in list(clients.items()):
-            if port != client_port:
-                try:
-                    server_socket.sendto(text.encode(), (ip, port))
-                except socket.error:
-                    del clients[port]
+            if port == exclude:
+                continue
+            try:
+                server_socket.sendto(text.encode(), (ip, port))
+            except socket.error:
+                # If fails, remove client from list
+                del clients[port]
+
 
 while True:
     try:
@@ -55,7 +59,19 @@ while True:
             welcome = f"[Server] Connected as {client_ip}:{client_port}\n[Server] CLIENTS:{client_list}"
             server_socket.sendto(welcome.encode(), (client_ip, client_port))
             # Broadcast updated list to all OTHER clients
-            broadcast(f"[Server] {client_port} joined\n[Server] CLIENTS:{client_list}")
+            broadcast(f"[Server] {client_port} joined\n[Server] CLIENTS:{client_list}", exclude=client_port)
+            continue
+
+        # Handle disconnection messages
+        if message_str.startswith("disconnect @"):
+            disc_port = int(message_str.split("@")[1])
+            with clients_lock:
+                if disc_port in clients:
+                    del clients[disc_port]
+                    # Adjust client list
+                    client_list = ",".join(str(p) for p in clients.keys())
+            print(f"{Colors.WARNING}{Colors.BG_DARK}Disconnected: {client_ip}:{client_port}{Colors.END}")
+            broadcast(f"[Server] {disc_port} left\n[Server] CLIENTS:{client_list}", exclude=disc_port)
             continue
 
         # Handle typing
@@ -65,7 +81,7 @@ while True:
         # Broadcast regular messages with sender info
         broadcast_msg = f"{client_port}> {message_str}"
         print(f"{Colors.GREEN}{Colors.BG_DARK}{broadcast_msg}{Colors.END}")
-        broadcast(broadcast_msg)
+        broadcast(broadcast_msg, exclude=client_port)
 
     except OSError as e:
         print(f"{Colors.FAIL}{Colors.BG_DARK}Error: {e}{Colors.END}")
