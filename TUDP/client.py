@@ -23,6 +23,8 @@ class DarkChatApp:
         self.receive_thread.daemon = True
         self.receive_thread.start()
 
+        self.typing_indexes = {}
+
     def setup_dark_theme(self):
         """Configure dark theme colors"""
         self.bg_color = "#2d2d2d"
@@ -86,6 +88,8 @@ class DarkChatApp:
         # Client list area
         client_frame = ttk.Frame(paned_window, style='Dark.TFrame', width=150)
         client_frame.pack_propagate(False)  # Prevent frame from resizing to contents
+
+        self.chat_display.tag_config('typing', foreground='#f5df3d', font=('Helvetica', 9, 'italic'))
 
         # Client list title
         ttk.Label(client_frame,
@@ -167,22 +171,52 @@ class DarkChatApp:
                                 self.display_message("Server", content, datetime.now().strftime("%H:%M"))
                 # Regular chat messages
                 elif message.startswith("typing:"):
-                    partial_text = message[7:]
-                    self.show_typing_text(address[1], partial_text)
+                    # message == "typing:54321:text"
+                    _, port_str, partial = message.split(":", 2)
+                    port = int(port_str)
+                    self.show_typing_text(port, partial)
                     continue
                 else:
+                    # When receiving the final message remove the typing text
                     if ">" in message:
                         sender, content = message.split(">", 1)
-                        self.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+                        port = int(sender.strip())
                     else:
-                        self.display_message(f"{address[1]}", message, datetime.now().strftime("%H:%M"))
+                        port = address[1]
+                    # remove preview
+                    self.clear_typing_text(port)
+                    # show message on chat
+                    self.display_message(sender.strip() if ">" in message else str(port),
+                                         content.strip() if ">" in message else message,
+                                         datetime.now().strftime("%H:%M"))
 
             except socket.error:
                 if self.running:
                     self.display_message("System", "Connection error", datetime.now().strftime("%H:%M"))
 
-    def show_typing_text(self, sendr_port, text):
-        self.typing_label.config(text=f"{sendr_port} is typing: {text}")
+    def show_typing_text(self, port, text):
+        self.chat_display.config(state='normal')
+        # if a line doesn't exist for a client, create one
+        if port not in self.typing_indexes:
+            idx = self.chat_display.index('end-1c')
+            self.chat_display.insert(idx, "\n", 'typing')
+            self.typing_indexes[port] = idx
+
+        idx = self.typing_indexes[port]
+        # remove the old preview
+        self.chat_display.delete(idx, f"{idx} lineend")
+        # insert the new preview
+        self.chat_display.insert(idx, f"{port} is typing: {text}", 'typing')
+        self.chat_display.see('end')
+        self.chat_display.config(state='disabled')
+
+    def clear_typing_text(self, port):
+        if port in self.typing_indexes:
+            idx = self.typing_indexes.pop(port)
+            self.chat_display.config(state='normal')
+            # remove the line
+            self.chat_display.delete(idx, f"{idx} +1line")
+            self.chat_display.config(state='disabled')
 
     def display_message(self, sender, message, timestamp):
         """Display a message in the chat window"""
@@ -201,7 +235,9 @@ class DarkChatApp:
         """Send a message to the server for broadcasting"""
         message = self.message_entry.get()
         if message:
+            self.clear_typing_text(self.client_socket.getsockname()[1])
             try:
+
                 self.client_socket.sendto(message.encode(), self.server_address)
                 self.display_message("You", message, datetime.now().strftime("%H:%M"))
                 self.message_entry.delete(0, tk.END)

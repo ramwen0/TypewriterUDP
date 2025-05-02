@@ -76,7 +76,9 @@ while True:
 
         # Handle typing
         if message_str.startswith("typing:"):
-            broadcast(message_str)
+            _, text = message_str.split(":", 1)
+            broadcast(f"typing:{client_port}:{text}", exclude=client_port)
+            continue
 
         # Broadcast regular messages with sender info
         broadcast_msg = f"{client_port}> {message_str}"
