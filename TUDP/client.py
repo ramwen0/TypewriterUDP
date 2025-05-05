@@ -215,7 +215,7 @@ class DarkChatApp:
             idx = self.typing_indexes.pop(port)
             self.chat_display.config(state='normal')
             # remove the line
-            self.chat_display.delete(idx, f"{idx} +1line")
+            self.chat_display.delete(idx, f"{idx} lineend")
             self.chat_display.config(state='disabled')
 
     def display_message(self, sender, message, timestamp):
