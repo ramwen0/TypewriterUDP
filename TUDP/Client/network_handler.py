@@ -1,5 +1,6 @@
 import socket
 import threading
+import hashlib
 from datetime import datetime
 
 class NetworkHandler:
@@ -9,7 +10,7 @@ class NetworkHandler:
         self.client_socket = None
         self.running = True
         self.receive_thread = None
-        self.gui = None  # Injected dependency
+        self.gui = None
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -29,13 +30,21 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
-                if message.startswith("[Server]"):
+                if message.startswith("AUTH_RESULT:"):
+                    _, status, msg = message.split(":", 2)
+                    success = status == "OK"
+                    if self.gui and hasattr(self.gui, "show_result"):
+                        self.gui.show_result(success, msg)
+
+                elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
                         if "CLIENTS:" in msg_part:
                             ports = msg_part.split("CLIENTS:")[1].split(",")
-                            self.gui.update_client_list(ports)
+                            if hasattr(self.gui, "update_client_list"):
+                                self.gui.update_client_list(ports)
                         else:
-                            self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
+                            if hasattr(self.gui, "display_message"):
+                                self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
                 elif message.startswith("typing:"):
                     _, port_str, partial = message.split(":", 2)
                     self.gui.show_typing_text(int(port_str), partial)
@@ -60,6 +69,11 @@ class NetworkHandler:
     def send_typing(self, text):
         typing_msg = f"typing:{text}"
         self.client_socket.sendto(typing_msg.encode(), self.server_address)
+
+    def send_auth(self, action, username, password):
+        encrypted_password = hashlib.sha256(password.encode()).hexdigest()
+        msg = f"AUTH:{action}:{username}:{encrypted_password}"
+        self.client_socket.sendto(msg.encode(), self.server_address)
 
     def get_port(self):
         return self.client_socket.getsockname()[1] if self.client_socket else None

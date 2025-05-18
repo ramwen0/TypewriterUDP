@@ -1,7 +1,94 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
+class AuthGUI:
+    def __init__(self, root, network_handler):
+        self.root = root
+        self.network_handler = network_handler
+        self._setup_styles()
+        self.root.configure(bg=self.bg_color)
+        self._center_window(300, 220)
+        self._setup_screen()
+
+    def _setup_styles(self):
+        style = ttk.Style(self.root)
+        style.theme_use('clam')
+        self.bg_color = "#1e1e1e"
+        self.entry_bg = "#2b2b2b"
+        self.text_fg = "#e0e0e0"
+        self.accent_color = "#4a8fe7"
+
+        style.configure('Auth.TFrame', background=self.bg_color)
+        style.configure('Auth.TLabel', background=self.bg_color, foreground=self.text_fg, font=('Segoe UI', 10))
+        style.configure('Auth.TEntry', fieldbackground=self.entry_bg, foreground=self.text_fg, insertcolor=self.text_fg, padding=5)
+        style.configure('Auth.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
+        style.map('Auth.TButton', background=[('active', '#3a77c2')])
+
+    def _center_window(self, width, height):
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        x = (screen_w - width) // 2
+        y = (screen_h - height) // 2
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.resizable(False, False)
+
+    def clear_screen(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+    def _setup_screen(self):
+        self.clear_screen()
+        outer = ttk.Frame(self.root, style='Auth.TFrame', padding=20)
+        outer.place(relx=0.5, rely=0.5, anchor='center')
+
+        ttk.Label(outer, text="Welcome", style='Auth.TLabel', font=('Segoe UI', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=(0, 15))
+
+        ttk.Label(outer, text="Username:", style='Auth.TLabel').grid(row=1, column=0, sticky='w')
+        self.username_entry = ttk.Entry(outer, style='Auth.TEntry')
+        self.username_entry.grid(row=1, column=1, sticky='ew', pady=5)
+
+        ttk.Label(outer, text="Password:", style='Auth.TLabel').grid(row=2, column=0, sticky='w', pady=(10, 0))
+        self.password_entry = ttk.Entry(outer, show='*', style='Auth.TEntry')
+        self.password_entry.grid(row=2, column=1, sticky='ew', pady=5)
+
+        login_btn = ttk.Button(outer, text="Login", command=self.login, style='Auth.TButton')
+        register_btn = ttk.Button(outer, text="Register", command=self.register, style='Auth.TButton')
+
+        login_btn.grid(row=3, column=0, sticky='ew', pady=(20, 0), padx=(0, 5))
+        register_btn.grid(row=3, column=1, sticky='ew', pady=(20, 0), padx=(5, 0))
+
+        outer.columnconfigure(0, weight=1)
+        outer.columnconfigure(1, weight=1)
+
+    def login(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get().strip()
+        if not username:
+            messagebox.showwarning("Input Required", "Please enter your username.")
+            return
+        if not password:
+            messagebox.showwarning("Input Required", "Please enter your password.")
+            return
+        self.network_handler.send_auth("login", username, password)
+
+    def register(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get().strip()
+        if not username:
+            messagebox.showwarning("Input Required", "Please enter your username.")
+            return
+        if not password:
+            messagebox.showwarning("Input Required", "Please enter your password.")
+            return
+        self.network_handler.send_auth("register", username, password)
+
+    def show_result(self, success, msg):
+        if success:
+            self.clear_screen()
+            self.root.after(0, self.network_handler.gui.app.start_main_gui)
+        else:
+            messagebox.showerror("Error", msg)
 
 class GUI:
     def __init__(self, root):

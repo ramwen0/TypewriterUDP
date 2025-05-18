@@ -1,6 +1,10 @@
 import socket
 import threading
 import time
+import sqlite3
+
+from TUDP.database import connect
+
 
 class Colors:
     HEADER = '\033[95m'
@@ -42,6 +46,26 @@ def broadcast(text, exclude=None):
                 # If fails, remove client from list
                 del clients[port]
 
+def handle_auth(message_str, client_ip, client_port):
+    _, action, username, password = message_str.split(":", 3)
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+    if action == "register":
+        cursor.execute("SELECT * FROM userdata WHERE username=?", (username,))
+        if cursor.fetchone():
+            result = f"AUTH_RESULT:FAIL:Username already exists"
+        else:
+            cursor.execute("INSERT INTO userdata (username, password) VALUES (?, ?)", (username, password))
+            conn.commit()
+            result = f"AUTH_RESULT:OK:User {username} registered successfully"
+    elif action == "login":
+        cursor.execute("SELECT * FROM userdata WHERE username=? AND password=?", (username, password))
+        if cursor.fetchone():
+            result = f"AUTH_RESULT:OK:User {username} logged in successfully"
+        else:
+            result = f"AUTH_RESULT:FAIL:Invalid credentials"
+    conn.close()
+    server_socket.sendto(result.encode(), (client_ip, client_port))
 
 while True:
     try:
@@ -78,6 +102,10 @@ while True:
         if message_str.startswith("typing:"):
             _, text = message_str.split(":", 1)
             broadcast(f"typing:{client_port}:{text}", exclude=client_port)
+            continue
+
+        if message_str.startswith("AUTH:"):
+            handle_auth(message_str, client_ip, client_port)
             continue
 
         # Broadcast regular messages with sender info
