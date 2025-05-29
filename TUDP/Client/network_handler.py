@@ -11,6 +11,7 @@ class NetworkHandler:
         self.running = True
         self.receive_thread = None
         self.gui = None
+        self.username_map = {}
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -35,27 +36,63 @@ class NetworkHandler:
                     success = status == "OK"
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
-
                 elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
-                        if "CLIENTS:" in msg_part:
-                            ports = msg_part.split("CLIENTS:")[1].split(",")
-                            if hasattr(self.gui, "update_client_list"):
-                                self.gui.update_client_list(ports)
-                        else:
-                            if hasattr(self.gui, "display_message"):
-                                self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
+                        if msg_part.startswith("[Server] USERNAME:"):
+                            try:
+                                _, port, username = msg_part[9:].split(":")
+                                self.username_map[port] = username
+                                if hasattr(self.gui, "update_client_list"):
+                                    self.gui.update_client_list(self.username_map)
+                            except ValueError:
+                                continue
+                        elif "CLIENTS:" in msg_part:
+                            try:
+                                client_info = msg_part.split("CLIENTS:")[1].split(",")
+                                new_map = {}
+                                for entry in client_info:
+                                    if ":" in entry:
+                                        port, username = entry.split(":", 1)
+                                        new_map[port] = username if username else None
+                                    else:
+                                        new_map[entry] = None  # Unauthenticated client
+                                self.username_map.update(new_map)
+                                if hasattr(self.gui, "update_client_list"):
+                                    self.gui.update_client_list(self.username_map)
+                            except ValueError:
+                                continue
+                        elif hasattr(self.gui, "display_message"):
+                            self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
                 elif message.startswith("typing:"):
-                    _, port_str, partial = message.split(":", 2)
-                    self.gui.show_typing_text(int(port_str), partial)
+                    try:
+                        _, sender, partial = message.split(":", 2)
+                        self.gui.show_typing_text(sender, partial)
+                    except ValueError:
+                        continue
+
+                # Regular messages
                 else:
-                    if ">" in message:
-                        sender, content = message.split(">", 1)
-                        port = int(sender.strip())
-                    else:
-                        port = int(message.split(":")[0])
-                    self.gui.clear_typing_text(port)
-                    self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+                    try:
+                        if ">" in message:
+                            sender, content = message.split(">", 1)
+                            if sender.strip().isdigit():
+                                sender = self.username_map.get(sender.strip(), sender.strip())
+                        else:
+                            parts = message.split(":", 1)
+                            if len(parts) == 2:
+                                port, content = parts
+                                sender = self.username_map.get(port.strip(), port.strip())
+
+                        # Display the message
+                        self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+
+                        # Clear typing indicator if we have port info
+                        if hasattr(self.gui, 'clear_typing_text'):
+                            if sender.strip().isdigit():  # If sender is a port number
+                                self.gui.clear_typing_text(int(sender.strip()))
+                    except (ValueError, IndexError):
+                        continue
+
             except socket.error:
                 if self.running:
                     self.gui.display_message("System", "Connection error", datetime.now().strftime("%H:%M"))
@@ -70,9 +107,12 @@ class NetworkHandler:
         typing_msg = f"typing:{text}"
         self.client_socket.sendto(typing_msg.encode(), self.server_address)
 
-    def send_auth(self, action, username, password):
-        encrypted_password = hashlib.sha256(password.encode()).hexdigest()
-        msg = f"AUTH:{action}:{username}:{encrypted_password}"
+    def send_auth(self, action, username=None, password=None):
+        if action == "enter":
+            msg = f"AUTH:{action}"
+        else:
+            encrypted_password = hashlib.sha256(password.encode()).hexdigest()
+            msg = f"AUTH:{action}:{username}:{encrypted_password}"
         self.client_socket.sendto(msg.encode(), self.server_address)
 
     def get_port(self):

@@ -5,10 +5,11 @@ from datetime import datetime
 class AuthGUI:
     def __init__(self, root, network_handler):
         self.root = root
+        self.root.title("Typewriter UDP Auth")
         self.network_handler = network_handler
         self._setup_styles()
         self.root.configure(bg=self.bg_color)
-        self._center_window(300, 220)
+        self._center_window(300, 240)
         self._setup_screen()
 
     def _setup_styles(self):
@@ -54,9 +55,11 @@ class AuthGUI:
 
         login_btn = ttk.Button(outer, text="Login", command=self.login, style='Auth.TButton')
         register_btn = ttk.Button(outer, text="Register", command=self.register, style='Auth.TButton')
+        enter_btn = ttk.Button(outer, text="Enter TUDP", command=self.enter, style='Auth.TButton')
 
         login_btn.grid(row=3, column=0, sticky='ew', pady=(20, 0), padx=(0, 5))
         register_btn.grid(row=3, column=1, sticky='ew', pady=(20, 0), padx=(5, 0))
+        enter_btn.grid(row=4, column=0, columnspan=2, sticky='ew', pady=(10, 0))
 
         outer.columnconfigure(0, weight=1)
         outer.columnconfigure(1, weight=1)
@@ -82,6 +85,9 @@ class AuthGUI:
             messagebox.showwarning("Input Required", "Please enter your password.")
             return
         self.network_handler.send_auth("register", username, password)
+
+    def enter(self):
+        self.network_handler.send_auth("enter")
 
     def show_result(self, success, msg):
         if success:
@@ -174,24 +180,32 @@ class GUI:
 
     def display_message(self, sender, message, timestamp):
         self.chat_display.config(state='normal')
+
+        # Determine if sender is a port number
+        is_port = sender.isdigit()
+
         if sender == "Server":
             self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
         else:
-            self.chat_display.insert(tk.END, f"{sender}\n", 'username')
+            # Display username if available, otherwise show "[port]"
+            display_name = sender if not is_port else f"{sender}"
+            self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
             self.chat_display.insert(tk.END, f"{message}\n", 'message')
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
+
         self.chat_display.config(state='disabled')
         self.chat_display.see(tk.END)
+        self.chat_display.see(tk.END)
 
-    def show_typing_text(self, port, text):
+    def show_typing_text(self, sender, text):
         self.chat_display.config(state='normal')
-        if port not in self.typing_indexes:
+        if sender not in self.typing_indexes:
             idx = self.chat_display.index('end-1c')
             self.chat_display.insert(idx, "\n", 'typing')
-            self.typing_indexes[port] = idx
-        idx = self.typing_indexes[port]
+            self.typing_indexes[sender] = idx
+        idx = self.typing_indexes[sender]
         self.chat_display.delete(idx, f"{idx} lineend")
-        self.chat_display.insert(idx, f"{port} is typing: {text}", 'typing')
+        self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
         self.chat_display.see('end')
         self.chat_display.config(state='disabled')
 
@@ -202,10 +216,14 @@ class GUI:
             self.chat_display.delete(idx, f"{idx} lineend")
             self.chat_display.config(state='disabled')
 
-    def update_client_list(self, ports):
+    def update_client_list(self, username_map):
         self.client_listbox.delete(0, tk.END)
-        for port in ports:
-            self.client_listbox.insert(tk.END, f"Client {port}")
+        for port, username in username_map.items():
+            if username:  # Authenticated user
+                display_text = f"{username} ({port})"
+            else:  # Unauthenticated client
+                display_text = f"Client {port}"
+            self.client_listbox.insert(tk.END, display_text)
 
     def on_typing(self, event=None):
         text = self.message_entry.get()
