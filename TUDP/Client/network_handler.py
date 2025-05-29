@@ -46,19 +46,19 @@ class NetworkHandler:
                                     self.gui.update_client_list(self.username_map)
                             except ValueError:
                                 continue
-                        elif "CLIENTS:" in msg_part:
+                        elif "CLIENTS:" in message:
                             try:
-                                client_info = msg_part.split("CLIENTS:")[1].split(",")
+                                client_info = message.split("CLIENTS:")[1].split(",")
                                 new_map = {}
                                 for entry in client_info:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
-                                        new_map[port] = username if username else None
+                                        new_map[port] = username if username else f"Guest_{port}"
                                     else:
-                                        new_map[entry] = None  # Unauthenticated client
-                                self.username_map.update(new_map)
+                                        new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
+                                self.username_map = new_map  # Replace completely rather than update
                                 if hasattr(self.gui, "update_client_list"):
-                                    self.gui.update_client_list(self.username_map)
+                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
                                 continue
                         elif hasattr(self.gui, "display_message"):

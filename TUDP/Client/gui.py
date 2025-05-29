@@ -219,10 +219,10 @@ class GUI:
     def update_client_list(self, username_map):
         self.client_listbox.delete(0, tk.END)
         for port, username in username_map.items():
-            if username:  # Authenticated user
+            if username.startswith("Guest_"):
+                display_text = f"{username}"
+            else:
                 display_text = f"{username} ({port})"
-            else:  # Unauthenticated client
-                display_text = f"Client {port}"
             self.client_listbox.insert(tk.END, display_text)
 
     def on_typing(self, event=None):

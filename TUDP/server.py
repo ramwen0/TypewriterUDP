@@ -23,7 +23,7 @@ buffer_size = 1024
 
 # Track clients: {port: (ip, last_active)}
 clients = {}
-client_users = {}
+client_users = {} # Track usernames
 clients_lock = threading.Lock()
 
 # server setup
@@ -44,6 +44,18 @@ def broadcast(text, exclude=None):
                 # If fails, remove client from list
                 del clients[port]
 
+def periodic_client_updates():
+    """Send client list updates to all connected clients every 5 seconds"""
+    while True:
+        time.sleep(5)  # Update interval (5 seconds)
+        with clients_lock:
+            if clients:  # Only send if there are clients
+                client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
+                client_list = ",".join(client_info)
+        broadcast(f"[Server] CLIENTS:{client_list}")
+# Start periodic updates thread
+update_thread = threading.Thread(target=periodic_client_updates, daemon=True)
+update_thread.start()
 
 def handle_auth(message_str, client_ip, client_port):
     parts = message_str.split(":")
