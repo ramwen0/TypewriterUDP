@@ -100,24 +100,30 @@ class GUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Typewriter UDP Client")
-        self.root.geometry("550x450")
+        self.root.geometry("700x400")  # Increased size for better layout
         self.typing_indexes = {}
-        self.network_handler = None  # Injected dependency
+        self.network_handler = None
         self.setup_dark_theme()
 
     def setup_dark_theme(self):
         self.bg_color = "#2d2d2d"
+        self.sidebar_color = "#252525"  # Slightly darker for sidebar
         self.text_bg = "#1e1e1e"
         self.text_fg = "#e0e0e0"
         self.accent_color = "#4a8fe7"
         self.server_color = "#4CAF50"
         self.entry_bg = "#3a3a3a"
         self.selection_color = "#3a3a3a"
+        self.button_active = "#3a3a3a"
+        self.button_hover = "#333333"
 
         self.root.configure(bg=self.bg_color)
         style = ttk.Style()
         style.theme_use('clam')
+
+        # Configure styles
         style.configure('Dark.TFrame', background=self.bg_color)
+        style.configure('Sidebar.TFrame', background=self.sidebar_color)
         style.configure('Dark.TEntry',
                         fieldbackground=self.entry_bg,
                         foreground=self.text_fg,
@@ -125,48 +131,97 @@ class GUI:
                         bordercolor="#444",
                         lightcolor="#444",
                         darkcolor="#444")
+        style.configure('Sidebar.TButton',
+                        background=self.sidebar_color,
+                        foreground=self.text_fg,
+                        borderwidth=0,
+                        focusthickness=0,
+                        focuscolor='none',
+                        font=('Helvetica', 10),
+                        padding=(10, 5))
+        style.map('Sidebar.TButton',
+                  background=[('active', self.button_active),
+                              ('!active', self.sidebar_color),
+                              ('hover', self.button_hover)],
+                  foreground=[('active', self.text_fg),
+                              ('!active', self.text_fg)])
+        style.configure('Dark.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
+        style.map('Dark.TButton', background=[('active', '#3a77c2')])
+        style.configure('Dark.TLabel', background=self.bg_color, foreground=self.text_fg, font=('Segoe UI', 12, 'bold'))
 
     def setup_ui(self, initial_port=None):
         main_frame = ttk.Frame(self.root, style='Dark.TFrame')
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        main_frame.pack(fill="both", expand=True)
 
-        paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
-        paned_window.pack(fill=tk.BOTH, expand=True)
+        # Sidebar Frame (leftmost element)
+        sidebar_frame = ttk.Frame(main_frame, style='Sidebar.TFrame', width=150)
+        sidebar_frame.pack(side="left", fill="y", padx=5, pady=10)
+        sidebar_frame.pack_propagate(False)
 
-        # Chat Frame
-        chat_frame = ttk.Frame(paned_window, style='Dark.TFrame')
+        # Sidebar Buttons
+        self.all_chat_btn = ttk.Button(sidebar_frame, text="ALL CHAT", style='Sidebar.TButton')
+        self.all_chat_btn.pack(fill="x", pady=5, padx=5)
+
+        # Separator
+        ttk.Separator(sidebar_frame, orient='horizontal').pack(fill="x")
+
+        self.dms_btn = ttk.Button(sidebar_frame, text="DMs", style='Sidebar.TButton')
+        self.dms_btn.pack(fill="x", pady=5, padx=5)
+
+        self.group_chats_btn = ttk.Button(sidebar_frame, text="GROUP CHATS", style='Sidebar.TButton')
+        self.group_chats_btn.pack(fill="x", pady=5, padx=5)
+
+        # Main Content Area (middle section)
+        content_frame = ttk.Frame(main_frame, style='Dark.TFrame', width=400)
+        content_frame.pack(side="left", fill="both", expand=False)
+        content_frame.pack_propagate(False)
+
+        # Client List Frame (rightmost element)
+        client_frame = ttk.Frame(main_frame, style='Dark.TFrame', width=150)
+        client_frame.pack(side="right", fill="y", padx=5, pady=10)
+        client_frame.pack_propagate(False)
+
+        # Client list Title (Label)
+        client_label = ttk.Label(client_frame, text="Active Users", style='Dark.TLabel')
+        client_label.pack(fill="x", expand=False, pady=(0, 5))
+
+        # Client List
+        self.client_listbox = tk.Listbox(
+            client_frame, bg=self.entry_bg, fg=self.text_fg,
+            selectbackground=self.accent_color, selectforeground="white",
+            font=('Helvetica', 9), relief="flat", highlightthickness=0
+        )
+        self.client_listbox.pack(fill="both", expand=True)
+
+        # Chat Display (inside content_frame)
         self.chat_display = scrolledtext.ScrolledText(
-            chat_frame, wrap=tk.WORD, width=50, height=20,
+            content_frame, wrap=tk.WORD, height=20,
             font=('Helvetica', 10), padx=10, pady=10, state='disabled',
             bg=self.text_bg, fg=self.text_fg, insertbackground=self.text_fg,
             selectbackground=self.selection_color, selectforeground=self.text_fg,
             relief=tk.FLAT
         )
-        self.chat_display.pack(fill=tk.BOTH, expand=True)
-        paned_window.add(chat_frame, weight=3)
+        self.chat_display.pack(fill="both", expand=True, padx=5, pady=(10, 0))
 
-        # Client List
-        client_frame = ttk.Frame(paned_window, style='Dark.TFrame', width=150)
-        client_frame.pack_propagate(False)
-        ttk.Label(client_frame, text="Connected Clients", style='Dark.TFrame',
-                  font=('Helvetica', 10, 'bold'), foreground=self.accent_color).pack(pady=(0, 5))
-        self.client_listbox = tk.Listbox(
-            client_frame, bg=self.entry_bg, fg=self.text_fg,
-            selectbackground=self.accent_color, selectforeground="white",
-            font=('Helvetica', 9), relief=tk.FLAT, highlightthickness=0
-        )
-        self.client_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        paned_window.add(client_frame, weight=1)
+        # Bottom Container Frame (inside content_frame)
+        bottom_frame = ttk.Frame(content_frame, style='Dark.TFrame')
+        bottom_frame.pack(side="bottom", fill="x", expand=False, pady=10, padx=2)
 
         # Input Area
-        input_frame = ttk.Frame(main_frame, style='Dark.TFrame')
-        input_frame.pack(fill=tk.X, pady=(10, 0))
+        input_frame = ttk.Frame(bottom_frame, style='Dark.TFrame', width=300)
+        input_frame.pack(side="left", fill="both", expand=False)
+        input_frame.pack_propagate(False)
         self.typing_label = ttk.Label(input_frame, text="", style='Dark.TFrame', foreground="#888888")
-        self.typing_label.pack(side=tk.LEFT, padx=(0, 10))
+        self.typing_label.pack(side="left")
         self.message_entry = ttk.Entry(input_frame, font=('Helvetica', 10), style='Dark.TEntry')
-        self.message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.message_entry.pack(fill="x", expand=True)
         self.message_entry.bind('<KeyRelease>', self.on_typing)
         self.message_entry.bind('<Return>', self.send_message)
+
+        # File send Button
+        self.file_btn = ttk.Button(bottom_frame, text="File", style='Dark.TButton', width=100)
+        self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
+        self.file_btn.pack_propagate(False)
 
         # Configure tags
         self.chat_display.tag_config('username', foreground=self.accent_color, font=('Helvetica', 10, 'bold'))
@@ -209,6 +264,11 @@ class GUI:
         self.chat_display.see('end')
         self.chat_display.config(state='disabled')
 
+    def on_typing(self, event=None):
+        text = self.message_entry.get()
+        if text and self.network_handler:
+            self.network_handler.send_typing(text)
+
     def clear_typing_text(self, port):
         if port in self.typing_indexes:
             idx = self.typing_indexes.pop(port)
@@ -224,11 +284,6 @@ class GUI:
             else:
                 display_text = f"{username} ({port})"
             self.client_listbox.insert(tk.END, display_text)
-
-    def on_typing(self, event=None):
-        text = self.message_entry.get()
-        if text and self.network_handler:
-            self.network_handler.send_typing(text)
 
     def send_message(self, event=None):
         message = self.message_entry.get()

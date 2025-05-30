@@ -110,7 +110,6 @@ def handle_auth(message_str, client_ip, client_port):
             if db_password and db_password[0] == password:
                 result = f"AUTH_RESULT:OK:User {username} logged in successfully"
                 client_users[client_port] = username
-                broadcast(f"[Server] {client_port} authenticated as {username}")
 
                 # Notify client and update all clients
                 server_socket.sendto(f"[Server] USERNAME:{client_port}:{username}".encode(), (client_ip, client_port))
