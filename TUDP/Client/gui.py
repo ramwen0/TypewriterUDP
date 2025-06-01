@@ -104,6 +104,13 @@ class GUI:
         self.typing_indexes = {}
         self.network_handler = None
         self.setup_dark_theme()
+        # ==== DM UI ==== #
+        self.chat_context = "all" # changed to ("dm", recipient_port) or ("group", recipient_port)
+        self.dm_histories = {} # {recipient_port} : [ (sender, msg, time), ... ]
+        self.selected_port = None
+
+        self.all_chat_history = []
+
 
     def setup_dark_theme(self):
         self.bg_color = "#2d2d2d"
@@ -159,16 +166,16 @@ class GUI:
         sidebar_frame.pack_propagate(False)
 
         # Sidebar Buttons
-        self.all_chat_btn = ttk.Button(sidebar_frame, text="ALL CHAT", style='Sidebar.TButton')
+        self.all_chat_btn = ttk.Button(sidebar_frame, text="ALL CHAT", command=self.all_chat, style='Sidebar.TButton')
         self.all_chat_btn.pack(fill="x", pady=5, padx=5)
 
         # Separator
         ttk.Separator(sidebar_frame, orient='horizontal').pack(fill="x")
 
-        self.dms_btn = ttk.Button(sidebar_frame, text="DMs", style='Sidebar.TButton')
+        self.dms_btn = ttk.Button(sidebar_frame, text="DMs", command=self.dms, style='Sidebar.TButton')
         self.dms_btn.pack(fill="x", pady=5, padx=5)
 
-        self.group_chats_btn = ttk.Button(sidebar_frame, text="GROUP CHATS", style='Sidebar.TButton')
+        self.group_chats_btn = ttk.Button(sidebar_frame, text="GROUP CHATS", command=self.groups, style='Sidebar.TButton')
         self.group_chats_btn.pack(fill="x", pady=5, padx=5)
 
         # Main Content Area (middle section)
@@ -192,6 +199,8 @@ class GUI:
             font=('Helvetica', 9), relief="flat", highlightthickness=0
         )
         self.client_listbox.pack(fill="both", expand=True)
+        # Bind selection in the list
+        self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
 
         # Chat Display (inside content_frame)
         self.chat_display = scrolledtext.ScrolledText(
@@ -233,25 +242,19 @@ class GUI:
         if initial_port:
             self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
-    def display_message(self, sender, message, timestamp):
-        self.chat_display.config(state='normal')
+    # ==== Sidebar button functionality ==== #
+    def all_chat(self):
+        self.chat_context = "all"
+        self.update_all_chat()
 
-        # Determine if sender is a port number
-        is_port = sender.isdigit()
+    def dms(self):
+        self.chat_context = "dm"
+        self.update_user_list()
 
-        if sender == "Server":
-            self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
-        else:
-            # Display username if available, otherwise show "[port]"
-            display_name = sender if not is_port else f"{sender}"
-            self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
-            self.chat_display.insert(tk.END, f"{message}\n", 'message')
-            self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
+    def groups(self):
+        pass
 
-        self.chat_display.config(state='disabled')
-        self.chat_display.see(tk.END)
-        self.chat_display.see(tk.END)
-
+    # ==== typing functions ==== #
     def show_typing_text(self, sender, text):
         self.chat_display.config(state='normal')
         if sender not in self.typing_indexes:
@@ -276,7 +279,10 @@ class GUI:
             self.chat_display.delete(idx, f"{idx} lineend")
             self.chat_display.config(state='disabled')
 
-    def update_client_list(self, username_map):
+    # ==== list updates ==== #
+    def update_client_list(self, username_map): # All Chat *client* list
+        if not hasattr(self, 'client_listbox'): # guard against initialization before setup_ui is run
+            return
         self.client_listbox.delete(0, tk.END)
         for port, username in username_map.items():
             if username.startswith("Guest_"):
@@ -285,10 +291,111 @@ class GUI:
                 display_text = f"{username} ({port})"
             self.client_listbox.insert(tk.END, display_text)
 
+    def update_user_list(self): # DM/Group *user* list
+        if not hasattr(self, 'user_listbox'): # guard against initialization before setup_ui is run
+            return
+        self.client_listbox.delete(0, tk.END) # clear list
+        self_port = str(self.network_handler.get_port())
+        for port, username in self.network_handler.user_map.items():
+            if not username.startswith("Guest_") and port != self_port: # not client's own port and not unauthenticated client
+                self.client_listbox.insert(tk.END, f"{username} ({port})") # add USER to list
+            # clear chat
+            self.chat_display.config(state='normal')
+            self.chat_display.delete("1.0", tk.END)
+            self.chat_display.config(state='disabled')
+
+    # ==== DM chat functionality ==== #
+    def on_client_select(self, event): # function to select a user from the list and get into their DM's
+        if self.chat_context != "dm":
+            return
+        selection = self.client_listbox.curselection()
+        if selection:
+            index = selection[0]
+            display_text = self.client_listbox.get(index)
+            # Extract port from list entry
+            port = display_text.split("(")[-1].rstrip(")")
+            self.selected_port = port
+            self.display_dm_history(port)
+
+    def display_dm_message(self, port, sender, message, timestamp):
+        if port not in self.dm_histories:
+            self.dm_histories[port] = [] # new entry for new chat
+        self.dm_histories[port].append((sender, message, timestamp))
+        # update display if it's the active chat
+        if self.chat_context == "dm" and self.selected_port == port:
+            self.display_dm_history(port)
+
+    def dm_notify(self, from_port, to_port):
+        self_port = str(self.network_handler.get_port())
+        other_port = from_port if to_port == self_port else to_port
+
+        #init history if non-existent
+        if other_port not in self.dm_histories:
+            self.dm_histories[other_port] = []
+            # banner message
+            other_username = self.network_handler.user_map.get(other_port, f"User {other_port}")
+            banner_msg = f"You're in a chat with {other_username}"
+            self.dm_histories[other_port].append(("System", banner_msg, datetime.now().strftime("%H:%M")))
+
+        if self.chat_context == "dm":
+            self.selected_port = other_port
+            self.display_dm_history(other_port)
+
+    def display_dm_history(self, port): # function to refresh DM messages with user in PORT
+        self.chat_display.config(state='normal')
+        self.chat_display.delete("1.0", tk.END)
+        dm_history = self.dm_histories.get(port, [])
+        for sender, msg, time in dm_history:
+            self.chat_display.insert(tk.END, f"{sender}\n", 'username')
+            self.chat_display.insert(tk.END, f"{msg}\n", 'message')
+            self.chat_display.insert(tk.END, f"{time}\n", 'time')
+        self.chat_display.config(state='disabled')
+
+    # ==== message handling ==== #
+    def display_message(self, sender, message, timestamp):
+        self.chat_display.config(state='normal')
+        is_port = sender.isdigit()
+
+        if sender == "Server":
+            self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
+        else:
+            # Display username if available, otherwise show "[port]"
+            display_name = sender if not is_port else f"{sender}"
+            self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
+            self.chat_display.insert(tk.END, f"{message}\n", 'message')
+            self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
+        # adding to history
+        if hasattr(self, "all_chat_history"):
+            self.all_chat_history.append((sender, message, timestamp))
+
+        self.chat_display.config(state='disabled')
+        self.chat_display.see(tk.END)
+        self.chat_display.see(tk.END)
+
     def send_message(self, event=None):
         message = self.message_entry.get()
-        if message and self.network_handler:
-            self.display_message("You", message, datetime.now().strftime("%H:%M"))
-            self.message_entry.delete(0, tk.END)
+        if not message or not self.network_handler:
+            return
+        self.message_entry.delete(0, tk.END)
+        timestamp = datetime.now().strftime("%H:%M")
+
+        if self.chat_context == "dm" and self.selected_port: # if DM, send accordingly
+            # add message to local history
+            self.display_dm_message(self.selected_port, "You", message, timestamp)
+            # send the message
+            self.network_handler.send_message(message, dm_recipient_port=self.selected_port)
+        else: # if not, treat as all chat message
+            self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
-            self.clear_typing_text(self.network_handler.get_port())
+        self.clear_typing_text(self.network_handler.get_port())
+
+    # ==== refresh chats ==== #
+    def update_all_chat(self):
+        self.chat_display.config(state='normal')
+        self.chat_display.delete("1.0", tk.END)
+        history = getattr(self, "all_chat_history", [])
+        for sender, msg, timestamp in history:
+            self.chat_display.insert(tk.END, f"{sender}\n", 'username')
+            self.chat_display.insert(tk.END, f"{msg}\n", 'message')
+            self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
+        self.chat_display.config(state='disabled')

@@ -31,11 +31,29 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
-                if message.startswith("AUTH_RESULT:"):
+                # ==== DM Notify ==== #
+                if message.startswith("DM_NOTIFY:"):
+                    _, from_port, to_port = message.split(":", 2)
+                    if self.gui and hasattr(self.gui, "dm_notify"):
+                        self.gui.dm_notify(from_port, to_port)
+                        continue
+                # ==== DM messages ==== #
+                if message.startswith("DM:"):
+                    try:
+                        _, sender_port, dm_content = message.split(":", 2)
+                        sender = self.username_map.get(sender_port, f"User {sender_port}")
+                        # Route to DM handler in GUI
+                        if self.gui and hasattr(self.gui, "display_dm_message"):
+                            self.gui.display_dm_message(sender_port, sender, dm_content, datetime.now().strftime("%H:%M"))
+                    except ValueError:
+                        continue
+                # ==== AUTH messages ==== #
+                elif message.startswith("AUTH_RESULT:"):
                     _, status, msg = message.split(":", 2)
                     success = status == "OK"
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
+                # ==== Server messages ==== #
                 elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
                         if msg_part.startswith("[Server] USERNAME:"):
@@ -63,6 +81,7 @@ class NetworkHandler:
                                 continue
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
+                # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
                     try:
                         _, sender, partial = message.split(":", 2)
@@ -97,9 +116,13 @@ class NetworkHandler:
                 if self.running:
                     self.gui.display_message("System", "Connection error", datetime.now().strftime("%H:%M"))
 
-    def send_message(self, message):
+    def send_message(self, message, dm_recipient_port=None): # Handling messages, be it DM's or not
         try:
-            self.client_socket.sendto(message.encode(), self.server_address)
+            if dm_recipient_port is not None:
+                msg = f"DM:{dm_recipient_port}:{message}"
+            else:
+                msg = message
+            self.client_socket.sendto(msg.encode(), self.server_address)
         except socket.error as e:
             self.gui.display_message("System", f"Failed to send message: {e}", datetime.now().strftime("%H:%M"))
 

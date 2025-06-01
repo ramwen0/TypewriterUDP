@@ -186,9 +186,34 @@ while True:
             broadcast(f"typing:{sender_name}:{text}", exclude=client_port)
             continue
 
+        # Handle authentication
         if message_str.startswith("AUTH:"):
             handle_auth(message_str, client_ip, client_port)
             continue
+
+        # Handle DM's
+        if message_str.startswith("DM:"):
+            try:
+                _, recipient_port, dm_content = message_str.split(":", 2)
+                recipient_port = int(recipient_port)
+                with clients_lock:
+                    sender_name = client_users.get(client_port, str(client_port))
+                    if recipient_port in clients:
+                        dm_msg = f"DM:{client_port}:{dm_content}"
+                        # Forward message only to recipient
+                        server_socket.sendto(dm_msg.encode(), (clients[recipient_port][0], recipient_port))
+                        if client_port != recipient_port:
+                            server_socket.sendto(dm_msg.encode(), (client_ip, client_port))
+                        # -- DM_NOTIFY -- #
+                        notify_dm = f"DM_NOTIFY:{client_port}:{recipient_port}"
+                        # notify recipient
+                        server_socket.sendto(notify_dm.encode(), (clients[recipient_port][0], recipient_port))
+                        #notify sender
+                        server_socket.sendto(notify_dm.encode(), (client_ip, client_port))
+                continue
+            except Exception as e:
+                print("DM parse error: ", e)
+                continue
 
         # Broadcast regular messages with sender info
         with clients_lock:
