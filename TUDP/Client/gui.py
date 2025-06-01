@@ -101,16 +101,20 @@ class GUI:
         self.root = root
         self.root.title("Typewriter UDP Client")
         self.root.geometry("700x400")  # Increased size for better layout
-        self.typing_indexes = {}
         self.network_handler = None
         self.setup_dark_theme()
+        # ==== Typing management ==== #
+        self.typing_indicators = {
+            "all": {},
+            "dm": {},
+            "groups": {}
+        }
         # ==== DM UI ==== #
         self.chat_context = "all" # changed to ("dm", recipient_port) or ("group", recipient_port)
         self.dm_histories = {} # {recipient_port} : [ (sender, msg, time), ... ]
         self.selected_port = None
-
+        # ==== All Chat UI ==== #
         self.all_chat_history = []
-
 
     def setup_dark_theme(self):
         self.bg_color = "#2d2d2d"
@@ -152,9 +156,24 @@ class GUI:
                               ('hover', self.button_hover)],
                   foreground=[('active', self.text_fg),
                               ('!active', self.text_fg)])
-        style.configure('Dark.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
+        style.configure('Active.TButton',
+                        background=self.accent_color,
+                        foreground='white',
+                        font=('Helvetica', 10, 'bold'))
+
+        style.configure('Inactive.TButton',
+                        background=self.sidebar_color,
+                        foreground=self.text_fg,
+                        font=('Helvetica', 10))
+        style.configure('Dark.TButton',
+                        font=('Segoe UI', 10, 'bold'),
+                        background=self.accent_color,
+                        foreground='white')
         style.map('Dark.TButton', background=[('active', '#3a77c2')])
-        style.configure('Dark.TLabel', background=self.bg_color, foreground=self.text_fg, font=('Segoe UI', 12, 'bold'))
+        style.configure('Dark.TLabel',
+                        background=self.bg_color,
+                        foreground=self.text_fg,
+                        font=('Segoe UI', 12, 'bold'))
 
     def setup_ui(self, initial_port=None):
         main_frame = ttk.Frame(self.root, style='Dark.TFrame')
@@ -166,16 +185,22 @@ class GUI:
         sidebar_frame.pack_propagate(False)
 
         # Sidebar Buttons
-        self.all_chat_btn = ttk.Button(sidebar_frame, text="ALL CHAT", command=self.all_chat, style='Sidebar.TButton')
+        self.all_chat_btn = ttk.Button(sidebar_frame, text="All Chat",
+                                       command=lambda: self.switch_chat_mode('all'),
+                                       style='Active.TButton' if self.chat_context == 'all' else 'Sidebar.TButton')
         self.all_chat_btn.pack(fill="x", pady=5, padx=5)
 
         # Separator
         ttk.Separator(sidebar_frame, orient='horizontal').pack(fill="x")
 
-        self.dms_btn = ttk.Button(sidebar_frame, text="DMs", command=self.dms, style='Sidebar.TButton')
+        self.dms_btn = ttk.Button(sidebar_frame, text="DMs",
+                                  command=lambda: self.switch_chat_mode('dm'),
+                                  style='Active.TButton' if self.chat_context == 'dm' else 'Inactive.TButton')
         self.dms_btn.pack(fill="x", pady=5, padx=5)
 
-        self.group_chats_btn = ttk.Button(sidebar_frame, text="GROUP CHATS", command=self.groups, style='Sidebar.TButton')
+        self.group_chats_btn = ttk.Button(sidebar_frame, text="Group Chats",
+                                  command=lambda: self.switch_chat_mode('groups'),
+                                  style='Active.TButton' if self.chat_context == 'groups' else 'Inactive.TButton')
         self.group_chats_btn.pack(fill="x", pady=5, padx=5)
 
         # Main Content Area (middle section)
@@ -243,25 +268,46 @@ class GUI:
             self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
     # ==== Sidebar button functionality ==== #
+    def switch_chat_mode(self, mode):
+        self.chat_context = mode
+
+        # Update button styles
+        self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Sidebar.TButton')
+        self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
+        self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
+
+        # Call the appropriate update method
+        if mode == 'all':
+            self.update_all_chat()
+        elif mode == 'dm':
+            self.update_user_list()
+        elif mode == 'groups':
+            print("in group mode")
+
     def all_chat(self):
-        self.chat_context = "all"
-        self.update_all_chat()
+        self.switch_chat_mode('all')
 
     def dms(self):
-        self.chat_context = "dm"
-        self.update_user_list()
+        self.switch_chat_mode('dm')
 
     def groups(self):
+        self.switch_chat_mode('groups')
         pass
 
     # ==== typing functions ==== #
-    def show_typing_text(self, sender, text):
+    def show_typing_text(self, sender, text, context="all", dm_port=None):
         self.chat_display.config(state='normal')
-        if sender not in self.typing_indexes:
+
+        if context == 'dm' and dm_port:
+            indicators = self.typing_indicators['dm'].setdefault(dm_port, {})
+        else:
+            indicators = self.typing_indicators['all']
+
+        if sender not in indicators:
             idx = self.chat_display.index('end-1c')
             self.chat_display.insert(idx, "\n", 'typing')
-            self.typing_indexes[sender] = idx
-        idx = self.typing_indexes[sender]
+            indicators[sender] = idx
+        idx = indicators[sender]
         self.chat_display.delete(idx, f"{idx} lineend")
         self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
         self.chat_display.see('end')
@@ -272,9 +318,19 @@ class GUI:
         if text and self.network_handler:
             self.network_handler.send_typing(text)
 
-    def clear_typing_text(self, port):
-        if port in self.typing_indexes:
-            idx = self.typing_indexes.pop(port)
+        if self.chat_context == 'dm' and self.selected_port:
+            self.clear_typing_text("You", context='dm', dm_port=self.selected_port)
+        else:
+            self.clear_typing_text("You", context='all')
+
+    def clear_typing_text(self, sender, context="all", dm_port=None):
+        if context == 'dm' and dm_port:
+            indicators = self.typing_indicators['dm'].get(dm_port, {})
+        else:
+            indicators = self.typing_indicators['all']
+
+        if sender in indicators:
+            idx = indicators.pop(sender)
             self.chat_display.config(state='normal')
             self.chat_display.delete(idx, f"{idx} lineend")
             self.chat_display.config(state='disabled')
@@ -292,11 +348,11 @@ class GUI:
             self.client_listbox.insert(tk.END, display_text)
 
     def update_user_list(self): # DM/Group *user* list
-        if not hasattr(self, 'user_listbox'): # guard against initialization before setup_ui is run
+        if not hasattr(self, 'client_listbox'): # guard against initialization before setup_ui is run
             return
         self.client_listbox.delete(0, tk.END) # clear list
         self_port = str(self.network_handler.get_port())
-        for port, username in self.network_handler.user_map.items():
+        for port, username in self.network_handler.username_map.items():
             if not username.startswith("Guest_") and port != self_port: # not client's own port and not unauthenticated client
                 self.client_listbox.insert(tk.END, f"{username} ({port})") # add USER to list
             # clear chat
@@ -359,18 +415,18 @@ class GUI:
         if sender == "Server":
             self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
         else:
-            # Display username if available, otherwise show "[port]"
-            display_name = sender if not is_port else f"{sender}"
-            self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
-            self.chat_display.insert(tk.END, f"{message}\n", 'message')
-            self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
+            if self.chat_context == "all":
+                # Display username if available, otherwise show "[port]"
+                display_name = sender if not is_port else f"{sender}"
+                self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
+                self.chat_display.insert(tk.END, f"{message}\n", 'message')
+                self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         # adding to history
         if hasattr(self, "all_chat_history"):
             self.all_chat_history.append((sender, message, timestamp))
 
         self.chat_display.config(state='disabled')
-        self.chat_display.see(tk.END)
-        self.chat_display.see(tk.END)
+        self.chat_display.see('end')
 
     def send_message(self, event=None):
         message = self.message_entry.get()
@@ -385,9 +441,11 @@ class GUI:
             # send the message
             self.network_handler.send_message(message, dm_recipient_port=self.selected_port)
         else: # if not, treat as all chat message
-            self.display_message("You", message, timestamp)
+            if self.chat_context == 'all':
+                self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
-        self.clear_typing_text(self.network_handler.get_port())
+
+        self.clear_typing_text("You", context=self.chat_context, dm_port=self.selected_port if self.chat_context == "dm" else None)
 
     # ==== refresh chats ==== #
     def update_all_chat(self):

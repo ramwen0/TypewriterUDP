@@ -90,15 +90,24 @@ def handle_auth(message_str, client_ip, client_port):
     conn = sqlite3.connect("userdata.db")
     cursor = conn.cursor()
 
+    # First check if table exists, if not create it
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS userdata (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT
+        )
+    """)
+    conn.commit()
+
     if action == "register":
         cursor.execute("SELECT * FROM userdata WHERE username=?", (username,))
         if cursor.fetchone():
             result = "AUTH_RESULT:FAIL:Username already exists"
         else:
-            cursor.execute("INSERT INTO userdata VALUES (?, ?)", (username, password))
+            cursor.execute("INSERT INTO userdata (username, password) VALUES (?, ?)", (username, password))
             conn.commit()
             result = f"AUTH_RESULT:OK:User {username} registered successfully"
-
 
     elif action == "login":
         # First check if username is already in use

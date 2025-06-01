@@ -45,6 +45,10 @@ class NetworkHandler:
                         # Route to DM handler in GUI
                         if self.gui and hasattr(self.gui, "display_dm_message"):
                             self.gui.display_dm_message(sender_port, sender, dm_content, datetime.now().strftime("%H:%M"))
+                        if not self.gui.chat_context == 'dm':
+                            self.gui.dms_btn.configure(text="DMs •")  # Add notification dot
+                        else:
+                            self.gui.dms_btn.configure(text="DMs")
                     except ValueError:
                         continue
                 # ==== AUTH messages ==== #
@@ -113,8 +117,10 @@ class NetworkHandler:
                         continue
 
             except socket.error:
-                if self.running:
+                if self.running and hasattr(self.gui, "display_message"):
                     self.gui.display_message("System", "Connection error", datetime.now().strftime("%H:%M"))
+                else:
+                    continue
 
     def send_message(self, message, dm_recipient_port=None): # Handling messages, be it DM's or not
         try:
