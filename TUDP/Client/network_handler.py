@@ -88,12 +88,14 @@ class NetworkHandler:
                 # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
                     try:
-                        _, sender, partial = message.split(":", 2)
-                        self.gui.show_typing_text(sender, partial)
+                        _, context, sender, partial = message.split(":", 3)
+                        if self.gui and hasattr(self.gui, "show_typing_text"):
+                            self.gui.root.after(0, self.gui.show_typing_text, sender, partial, context)
+                        continue  # Skip regular message processing
                     except ValueError:
                         continue
 
-                # Regular messages
+                # ==== Regular messages ==== #
                 else:
                     try:
                         if ">" in message:
@@ -108,6 +110,10 @@ class NetworkHandler:
 
                         # Display the message
                         self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+                        if not self.gui.chat_context == 'all':
+                            self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
+                        else:
+                            self.gui.all_chat_btn.configure(text="All Chat")
 
                         # Clear typing indicator if we have port info
                         if hasattr(self.gui, 'clear_typing_text'):
@@ -132,8 +138,8 @@ class NetworkHandler:
         except socket.error as e:
             self.gui.display_message("System", f"Failed to send message: {e}", datetime.now().strftime("%H:%M"))
 
-    def send_typing(self, text):
-        typing_msg = f"typing:{text}"
+    def send_typing(self, text, context="all"):
+        typing_msg = f"typing:{context}:{text}"
         self.client_socket.sendto(typing_msg.encode(), self.server_address)
 
     def send_auth(self, action, username=None, password=None):

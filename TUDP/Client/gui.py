@@ -295,45 +295,59 @@ class GUI:
         pass
 
     # ==== typing functions ==== #
-    def show_typing_text(self, sender, text, context="all", dm_port=None):
+    def show_typing_text(self, sender, text, context="all"):
+        # Only show if we're in the matching context
+        if (context == 'all' and self.chat_context != 'all') or \
+                (context == 'dm' and self.chat_context != 'dm'):
+            return
+
         self.chat_display.config(state='normal')
+        indicators = self.typing_indicators[context]
 
-        if context == 'dm' and dm_port:
-            indicators = self.typing_indicators['dm'].setdefault(dm_port, {})
-        else:
-            indicators = self.typing_indicators['all']
+        # Clear previous indicator if exists
+        if sender in indicators:
+            self.chat_display.delete(indicators[sender], f"{indicators[sender]} lineend")
 
-        if sender not in indicators:
-            idx = self.chat_display.index('end-1c')
-            self.chat_display.insert(idx, "\n", 'typing')
-            indicators[sender] = idx
-        idx = indicators[sender]
-        self.chat_display.delete(idx, f"{idx} lineend")
-        self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
+        # Add new indicator at the end
+        pos = self.chat_display.index('end-1c')
+        self.chat_display.insert(pos, f"\n{sender} is typing: {text}", 'typing')
+        indicators[sender] = pos  # Store the position
         self.chat_display.see('end')
         self.chat_display.config(state='disabled')
 
     def on_typing(self, event=None):
         text = self.message_entry.get()
         if text and self.network_handler:
-            self.network_handler.send_typing(text)
+            context = 'dm' if self.chat_context == 'dm' else 'all'
+            self.network_handler.send_typing(text, context)
 
-        if self.chat_context == 'dm' and self.selected_port:
-            self.clear_typing_text("You", context='dm', dm_port=self.selected_port)
-        else:
-            self.clear_typing_text("You", context='all')
+        # Clear existing typing indicator
+        self.clear_typing_text("You", context=self.chat_context)
 
-    def clear_typing_text(self, sender, context="all", dm_port=None):
-        if context == 'dm' and dm_port:
-            indicators = self.typing_indicators['dm'].get(dm_port, {})
-        else:
-            indicators = self.typing_indicators['all']
+    def clear_typing_text(self, sender, context="all"):
+        if context not in self.typing_indicators:
+            return
 
-        if sender in indicators:
-            idx = indicators.pop(sender)
+        if sender in self.typing_indicators[context]:
+            idx = self.typing_indicators[context].pop(sender)
             self.chat_display.config(state='normal')
             self.chat_display.delete(idx, f"{idx} lineend")
             self.chat_display.config(state='disabled')
+
+    def _display_typing(self, sender, text, context):
+        self.chat_display.config(state='normal')
+        indicators = self.typing_indicators[context]
+
+        if sender not in indicators:
+            idx = self.chat_display.index('end-1c')
+            self.chat_display.insert(idx, "\n", 'typing')
+            indicators[sender] = idx
+
+        idx = indicators[sender]
+        self.chat_display.delete(idx, f"{idx} lineend")
+        self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
+        self.chat_display.see('end')
+        self.chat_display.config(state='disabled')
 
     # ==== list updates ==== #
     def update_client_list(self, username_map): # All Chat *client* list
@@ -432,6 +446,7 @@ class GUI:
         message = self.message_entry.get()
         if not message or not self.network_handler:
             return
+        self.clear_typing_text("You", context=self.chat_context)
         self.message_entry.delete(0, tk.END)
         timestamp = datetime.now().strftime("%H:%M")
 
@@ -445,7 +460,7 @@ class GUI:
                 self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
 
-        self.clear_typing_text("You", context=self.chat_context, dm_port=self.selected_port if self.chat_context == "dm" else None)
+        self.clear_typing_text("You", context=self.chat_context)
 
     # ==== refresh chats ==== #
     def update_all_chat(self):

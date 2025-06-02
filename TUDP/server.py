@@ -32,6 +32,25 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 server_socket.bind((local_IP, local_port))
 print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 
+# Initialize database
+def init_database():
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS userdata (
+            id INTEGER PRIMARY KEY,
+            username VARCHAR(255) NOT NULL,
+            password VARCHAR(255) NOT NULL,
+            UNIQUE(username)
+        )
+    """)
+    conn.commit()
+    conn.close()
+    print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Database initialized{Colors.END}")
+
+# Call the initialization function
+init_database()
+
 def broadcast(text, exclude=None):
     """Send `text` to all clients, except the one with `exclude` port"""
     with clients_lock:
@@ -180,11 +199,15 @@ while True:
 
         # Handle typing
         if message_str.startswith("typing:"):
-            _, text = message_str.split(":", 1)
-            with clients_lock:
-                sender_name = client_users.get(client_port, str(client_port))
-            broadcast(f"typing:{sender_name}:{text}", exclude=client_port)
-            continue
+            try:
+                _, context, text = message_str.split(":", 2)
+                with clients_lock:
+                    sender_name = client_users.get(client_port, str(client_port))
+                # Only broadcast the typing indicator, don't let it become a regular message
+                broadcast(f"typing:{context}:{sender_name}:{text}", exclude=client_port)
+                continue
+            except ValueError:
+                continue
 
         # Handle authentication
         if message_str.startswith("AUTH:"):
