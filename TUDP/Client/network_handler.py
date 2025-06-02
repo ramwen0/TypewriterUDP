@@ -65,7 +65,7 @@ class NetworkHandler:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
                                 if hasattr(self.gui, "update_client_list"):
-                                    self.gui.update_client_list(self.username_map)
+                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
                                 continue
                         elif "CLIENTS:" in message:
