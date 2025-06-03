@@ -75,12 +75,13 @@ class NetworkHandler:
                             try:
                                 client_info = message.split("CLIENTS:")[1].split(",")
                                 new_map = {}
+                                new_ip_map = {}
                                 for entry in client_info:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
                                         new_map[port] = username if username else f"Guest_{port}"
 
-                                        if len(entry.split(":") == 3:
+                                        if len(entry.split(":")) == 3:
                                             _, _, ip = entry.split(":")
                                             new_ip_map[port] = ip  # Store IP for file transfers
                                     else:
