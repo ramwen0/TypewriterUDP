@@ -502,7 +502,7 @@ class GUI:
         if hasattr(self, "pending_file") and self.pending_file[0] == to_port:
             if status == "ACCEPT":
                 # Get IP from username_map (you may need to store IPs in username_map)
-                ip = "127.0.0.1"  # For local test, otherwise get from map
+                ip = self.network_handler.port_ip_map.get(to_port, "127.0.0.1")
                 _, filepath, _, _ = self.pending_file
                 self.network_handler.file_transfer_handler.send_file(ip, int(to_port), filepath)
             else:

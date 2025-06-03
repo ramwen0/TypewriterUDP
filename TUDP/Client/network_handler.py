@@ -14,6 +14,7 @@ class NetworkHandler:
         self.gui = None
         self.username_map = {}
         self.file_transfer_handler = None
+        self.port_ip_map = {}  # Maps ports to IP addresses for file transfers
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -78,9 +79,14 @@ class NetworkHandler:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
                                         new_map[port] = username if username else f"Guest_{port}"
+
+                                        if len(entry.split(":") == 3:
+                                            _, _, ip = entry.split(":")
+                                            new_ip_map[port] = ip  # Store IP for file transfers
                                     else:
                                         new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
                                 self.username_map = new_map  # Replace completely rather than update
+                                self.port_ip_map = new_ip_map  # Update IP map
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:

@@ -135,7 +135,7 @@ def handle_auth(message_str, client_ip, client_port):
 
                 # Build updated client list
                 with clients_lock:
-                    client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
+                    client_info = [f"{p}:{client_users.get(p, '')}:{clients[p][0]}" for p in clients]
                     client_list = ",".join(client_info)
 
                 # Update ALL clients
