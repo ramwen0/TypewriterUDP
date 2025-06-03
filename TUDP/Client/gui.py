@@ -502,12 +502,28 @@ class GUI:
         if hasattr(self, "pending_file") and self.pending_file[0] == to_port:
             if status == "ACCEPT":
                 # Get IP from username_map (you may need to store IPs in username_map)
-                ip = self.network_handler.port_ip_map.get(to_port, "127.0.0.1")
-                _, filepath, _, _ = self.pending_file
-                self.network_handler.file_transfer_handler.send_file(ip, int(to_port), filepath)
+                ip = self.network_handler.port_ip_map.get(to_port)
+                if not ip:
+                    tk.messagebox.showerror("Erro", f"IP do destinatário ({to_port}) não encontrado.")
+                    # Clean up pending file to prevent re-sending on a future unrelated ACCEPT
+                    del self.pending_file
+                    return
+
+                _, filepath, filename, _ = self.pending_file  # Unpack filename for messages
+
+                # Use the correct TCP listening port of the recipient's FileTransferHandler
+                recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
+
+                print(f"Attempting to send {filename} to {ip}:{recipient_file_transfer_listen_port}")  # Debug print
+                self.network_handler.file_transfer_handler.send_file(ip, recipient_file_transfer_listen_port, filepath)
             else:
-                tk.messagebox.showinfo("File Transfer", "Recipient rejected the file.")
-            del self.pending_file
+                if hasattr(self, "pending_file"):  # Check again in case of multiple responses
+                    _, _, filename, _ = self.pending_file
+                    tk.messagebox.showinfo("File Transfer", f"Recipient rejected the file '{filename}'.")
+
+                # Clean up pending_file only after attempting to send or handling rejection
+            if hasattr(self, "pending_file"):
+                del self.pending_file
 
     def ask_file_accept(self, filename, filesize):
         return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
