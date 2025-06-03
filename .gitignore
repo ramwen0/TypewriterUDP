@@ -1,1 +1,23 @@
+# Ignore PyChache directory
 /TUDP/Client/__pycache__
+
+# Ignore all .log files
+*.log
+
+# Except important.log
+!important.log
+
+# Ignore the build directory
+build/
+
+# Ignore all .tmp files in any directory
+**/*.tmp
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignores all emacs backup files
+*~
+
+# Ignores all emacs autosave files
+\#*#
