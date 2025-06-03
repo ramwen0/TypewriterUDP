@@ -1,5 +1,5 @@
 # Ignore PyChache directory
-/TUDP/Client/__pycache__
+/TUDP/Client/__pycache__/
 
 # Ignore all .log files
 *.log

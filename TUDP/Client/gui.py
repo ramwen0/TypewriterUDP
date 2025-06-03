@@ -208,6 +208,14 @@ class GUI:
         content_frame.pack(side="left", fill="both", expand=False)
         content_frame.pack_propagate(False)
 
+        # Active chat label frame (in top middle section)
+        active_chat_frame = ttk.Label(content_frame, text="Active Chat", style='Dark.TLabel', height=50)
+        active_chat_frame.pack(side="left", fill="both", expand=False)
+        
+        # Active chat label
+        #active_chat_label = ttk.Label
+
+
         # Client List Frame (rightmost element)
         client_frame = ttk.Frame(main_frame, style='Dark.TFrame', width=150)
         client_frame.pack(side="right", fill="y", padx=5, pady=10)
@@ -478,4 +486,4 @@ class GUI:
 
     # === switch to group mode ===
     def update_group_ui(self):
-        print(updating group)
+        print("updating group")
