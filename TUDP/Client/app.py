@@ -1,5 +1,6 @@
 from gui import GUI, AuthGUI
 from network_handler import NetworkHandler
+from file_transfer_handler import FileTransferHandler
 
 class DarkChatApp:
     def __init__(self, root):
@@ -10,6 +11,7 @@ class DarkChatApp:
         self.network_handler.gui.app = self
 
         self.port = self.network_handler.setup_network()
+        self.network_handler.file_transfer_handler = FileTransferHandler(self.network_handler.gui, self.port)
         self.network_handler.start_receiving()
 
         # Configure closing protocol
@@ -21,6 +23,7 @@ class DarkChatApp:
         self.gui.network_handler = self.network_handler
         self.network_handler.gui = self.gui
         self.gui.setup_ui(initial_port=self.port)
+        self.network_handler.file_transfer_handler.gui = self.gui
 
     def on_closing(self):
         self.network_handler.on_closing()
