@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 from datetime import datetime
 import os
+import threading
 
 class AuthGUI:
     def __init__(self, root, network_handler):
@@ -500,30 +501,32 @@ class GUI:
 
     def on_file_response(self, to_port, status):
         if hasattr(self, "pending_file") and self.pending_file[0] == to_port:
+            pending_file_details = self.pending_file
+            # Remover pending_file imediatamente para evitar condições de corrida ou reenvios
+            del self.pending_file
+
             if status == "ACCEPT":
-                # Get IP from username_map (you may need to store IPs in username_map)
                 ip = self.network_handler.port_ip_map.get(to_port)
                 if not ip:
                     tk.messagebox.showerror("Erro", f"IP do destinatário ({to_port}) não encontrado.")
-                    # Clean up pending file to prevent re-sending on a future unrelated ACCEPT
-                    del self.pending_file
                     return
 
-                _, filepath, filename, _ = self.pending_file  # Unpack filename for messages
+                _, filepath, filename, _ = pending_file_details
 
-                # Use the correct TCP listening port of the recipient's FileTransferHandler
                 recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
 
-                print(f"Attempting to send {filename} to {ip}:{recipient_file_transfer_listen_port}")  # Debug print
-                self.network_handler.file_transfer_handler.send_file(ip, recipient_file_transfer_listen_port, filepath)
-            else:
-                if hasattr(self, "pending_file"):  # Check again in case of multiple responses
-                    _, _, filename, _ = self.pending_file
-                    tk.messagebox.showinfo("File Transfer", f"Recipient rejected the file '{filename}'.")
+                print(
+                    f"GUI.on_file_response: A iniciar thread para enviar {filename} para {ip}:{recipient_file_transfer_listen_port}")
 
-                # Clean up pending_file only after attempting to send or handling rejection
-            if hasattr(self, "pending_file"):
-                del self.pending_file
+                send_thread = threading.Thread(
+                    target=self.network_handler.file_transfer_handler.send_file,
+                    args=(ip, recipient_file_transfer_listen_port, filepath),
+                    daemon=True
+                )
+                send_thread.start()
+            else:
+                _, _, filename, _ = pending_file_details
+                tk.messagebox.showinfo("Transferência de Ficheiro", f"O destinatário rejeitou o ficheiro '{filename}'.")
 
     def ask_file_accept(self, filename, filesize):
         return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
@@ -539,3 +542,12 @@ class GUI:
 
     def notify_file_rejected(self, filename):
         tk.messagebox.showinfo("File Transfer", f"File '{filename}' was rejected by the recipient.")
+
+
+    def notify_file_transfer_error(self, filename, error_message):
+        tk.messagebox.showerror("Erro na Transferência de Ficheiro", f"Erro ao transferir '{filename}': {error_message}")
+
+    def notify_file_partially_received(self, filename, path, received_bytes, total_bytes):
+        tk.messagebox.showwarning("Transferência de Ficheiro Incompleta",
+                                  f"O ficheiro '{filename}' foi recebido apenas parcialmente ({received_bytes}/{total_bytes} bytes) "
+                                  f"e guardado em {path}.\nO emissor pode ter-se desconectado ou ocorrido um erro.")
