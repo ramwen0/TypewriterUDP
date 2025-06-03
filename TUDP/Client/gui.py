@@ -546,8 +546,3 @@ class GUI:
 
     def notify_file_transfer_error(self, filename, error_message):
         tk.messagebox.showerror("Erro na Transferência de Ficheiro", f"Erro ao transferir '{filename}': {error_message}")
-
-    def notify_file_partially_received(self, filename, path, received_bytes, total_bytes):
-        tk.messagebox.showwarning("Transferência de Ficheiro Incompleta",
-                                  f"O ficheiro '{filename}' foi recebido apenas parcialmente ({received_bytes}/{total_bytes} bytes) "
-                                  f"e guardado em {path}.\nO emissor pode ter-se desconectado ou ocorrido um erro.")
