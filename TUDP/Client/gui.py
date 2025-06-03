@@ -279,9 +279,12 @@ class GUI:
         # Call the appropriate update method
         if mode == 'all':
             self.update_all_chat()
+            print("in all chat mode")
         elif mode == 'dm':
             self.update_user_list()
+            print("in dm mode")
         elif mode == 'groups':
+            self.update_group_ui()
             print("in group mode")
 
     def all_chat(self):
@@ -474,5 +477,5 @@ class GUI:
         self.chat_display.config(state='disabled')
 
     # === switch to group mode ===
-    def update_group(self):
+    def update_group_ui(self):
         print(updating group)
