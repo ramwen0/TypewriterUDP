@@ -472,3 +472,7 @@ class GUI:
             self.chat_display.insert(tk.END, f"{msg}\n", 'message')
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         self.chat_display.config(state='disabled')
+
+    # === switch to group mode ===
+    def update_group(self):
+        print(updating group)
