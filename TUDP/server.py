@@ -300,11 +300,8 @@ while True:
                     sender_name = client_users.get(client_port, str(client_port))
                     recipient_name = client_users.get(recipient_port, str(recipient_port))
                     if recipient_port in clients:
-                        # Forward message to recipient
                         dm_msg = f"DM:{client_port}:{dm_content}"
                         server_socket.sendto(dm_msg.encode(), (clients[recipient_port][0], recipient_port))
-                        # Also send back to sender for their UI
-                        server_socket.sendto(dm_msg.encode(), (client_ip, client_port))
 
                         # Store in database if both users are authenticated (not guests)
                         if not sender_name.startswith("Guest_") and not recipient_name.startswith("Guest_"):
@@ -325,12 +322,15 @@ while True:
                 print("DM parse error: ", e)
         elif message_str.startswith("REQUEST_DM_HISTORY:"):
             try:
-                _, user1, user2 = message_str.split(":", 2)
-                history = get_dm_history_between(user1, user2)
-                for msg in history:
-                    history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
-                    server_socket.sendto(history_msg.encode(), (client_ip, client_port))
-            except ValueError:
+                parts = message_str.split(":")
+                if len(parts) == 3:  # REQUEST_DM_HISTORY:user1:user2
+                    _, user1, user2 = parts
+                    history = get_dm_history_between(user1, user2)
+                    for msg in history:
+                        history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
+                        server_socket.sendto(history_msg.encode(), (client_ip, client_port))
+            except ValueError as e:
+                print(f"Error processing DM history request: {e}")
                 continue
 
         # Broadcast regular messages with sender info
