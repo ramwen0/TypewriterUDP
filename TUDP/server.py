@@ -182,11 +182,11 @@ def get_dm_history(username):
     cursor = conn.cursor()
 
     cursor.execute("""
-                   SELECT sender_username, recipient_username, message, timestamp
-                   FROM dm_histories
-                   WHERE sender_username=? OR recipient_username=?
-                   ORDER BY timestamp
-                   """, (username, username))
+        SELECT DISTINCT sender_username, recipient_username, message, timestamp
+        FROM dm_histories
+        WHERE sender_username=? OR recipient_username=?
+        ORDER BY timestamp
+    """, (username, username))
 
     history = cursor.fetchall()
     conn.close()

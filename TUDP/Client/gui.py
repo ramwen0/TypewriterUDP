@@ -513,13 +513,14 @@ class GUI:
     def refresh_dm_history(self):
         """Periodically refresh DM history for active conversations"""
         if self.chat_context == "dm" and self.selected_port:
-            # Clear chat
-            self.chat_display.config(state='normal')
-            self.chat_display.delete("end")
-            self.chat_display.config(state='disabled')
             # Get the username associated with the selected port
             username = self.network_handler.username_map.get(self.selected_port)
             if username:
+                # Clear existing history for this conversation
+                if username in self.dm_histories:
+                    self.dm_histories[username] = []
+
+                # Request fresh history from server
                 self.network_handler.send_message(f"REQUEST_DM_HISTORY:{username}")
 
         # Schedule the next refresh
