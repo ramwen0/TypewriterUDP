@@ -15,12 +15,17 @@ class DarkChatApp:
         # Configure closing protocol
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def start_main_gui(self):
+    def start_main_gui(self, on_ready=None):
         self.auth_gui.clear_screen()
         self.gui = GUI(self.root)
         self.gui.network_handler = self.network_handler
         self.network_handler.gui = self.gui
         self.gui.setup_ui(initial_port=self.port)
+        self.gui.load_dm_history()
+        self.root.after(1500, self.gui.load_known_users_history)
+        self.gui.start_dm_refresh_thread()
+        if on_ready:
+            self.root.after(100, on_ready)
 
     def on_closing(self):
         self.network_handler.on_closing()
