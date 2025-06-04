@@ -37,8 +37,9 @@ class NetworkHandler:
                     try:
                         _, sender, recipient, content, timestamp = message.split(":", 4)
                         if self.gui:
-                            if hasattr(self.gui, "add_dm_history"):
-                                self.gui.root.after(0, self.gui.add_dm_history, sender, recipient, content, timestamp)
+                            if hasattr(self.gui, "process_dm_history"):
+                                self.gui.root.after(0, self.gui.process_dm_history,
+                                                    sender, recipient, content, timestamp)
                     except ValueError:
                         continue
                 # ==== DM Notify ==== #

@@ -383,25 +383,46 @@ class GUI:
             self.chat_display.config(state='disabled')
 
     # ==== DM chat functionality ==== #
-    def on_client_select(self, event): # function to select a user from the list and get into their DM's
+    def on_client_select(self, event):
         if self.chat_context != "dm":
             return
         selection = self.client_listbox.curselection()
         if selection:
             index = selection[0]
             display_text = self.client_listbox.get(index)
-            # Extract port from list entry
-            port = display_text.split("(")[-1].rstrip(")")
+            # Extract username and port from list entry
+            parts = display_text.split("(")
+            username = parts[0].strip()
+            port = parts[1].rstrip(")") if len(parts) > 1 else None
             self.selected_port = port
-            self.display_dm_history(port)
+            self.selected_username = username
+
+            # Clear current display
+            self.chat_display.config(state='normal')
+            self.chat_display.delete("1.0", tk.END)
+            self.chat_display.config(state='disabled')
+
+            # Request fresh history
+            self.request_dm_history(username)
 
     def display_dm_message(self, port, sender, message, timestamp):
+        # Get the username associated with this port
+        username = self.network_handler.username_map.get(port, f"User {port}")
+
         if port not in self.dm_histories:
-            self.dm_histories[port] = [] # new entry for new chat
-        self.dm_histories[port].append((sender, message, timestamp))
-        # update display if it's the active chat
+            self.dm_histories[port] = []
+            # Add a conversation header if this is a new chat
+            self.dm_histories[port].append(
+                ("System", f"You're now chatting with {username}", timestamp)
+            )
+
+        # Add the message to history
+        display_sender = "You" if sender == str(self.network_handler.get_port()) else username
+        self.dm_histories[port].append((display_sender, message, timestamp))
+
+        # Update display if this is the active chat
         if self.chat_context == "dm" and self.selected_port == port:
-            self.display_dm_history(port)
+            self.display_dm_history(username)
 
     def dm_notify(self, from_port, to_port):
         self_port = str(self.network_handler.get_port())
@@ -425,15 +446,28 @@ class GUI:
         self.chat_display.config(state='normal')
         self.chat_display.delete("1.0", tk.END)
 
+        # Find the port associated with this username
+        port = None
+        for p, uname in self.network_handler.username_map.items():
+            if uname == username:
+                port = p
+                break
+
+        if port is None or port not in self.dm_histories:
+            self.chat_display.config(state='disabled')
+            return
+
         # Add conversation header
         self.chat_display.insert(tk.END,
                                  f"Conversation with {username}\n{'=' * 30}\n",
                                  'server')
 
         # Add messages
-        for sender, message, time in self.dm_histories.get(username, []):
+        for sender, message, time in self.dm_histories.get(port, []):
             if sender == "System":
-                continue  # Skip system messages we added elsewhere
+                self.chat_display.insert(tk.END, f"{message}\n", 'server')
+                continue
+
             prefix = "You: " if sender == "You" else f"{username}: "
             self.chat_display.insert(tk.END, f"{prefix}{message}\n", 'message')
             self.chat_display.insert(tk.END, f"({time})\n\n", 'time')
@@ -441,34 +475,61 @@ class GUI:
         self.chat_display.config(state='disabled')
         self.chat_display.see('end')
 
-    def process_dm_history(self, direction, other_user, message, timestamp):
-        """Process a single DM history entry from the server"""
-        # Convert direction to display format
-        display_direction = "from" if direction == "from" else "to"
+    def process_dm_history(self, sender, recipient, message, timestamp):
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
 
-        # Find or create the DM history entry
-        if other_user not in self.dm_histories:
-            self.dm_histories[other_user] = []
+        # Determine which user this conversation is with
+        if sender == my_username:
+            other_user = recipient
+        else:
+            other_user = sender
 
-        # Format the message based on direction
-        formatted_msg = f"[{display_direction} {other_user} at {timestamp}] {message}"
-        self.dm_histories[other_user].append(("System", formatted_msg, timestamp))
+        # Find the port associated with this user
+        other_port = None
+        for port, username in self.network_handler.username_map.items():
+            if username == other_user:
+                other_port = port
+                break
 
-        # Update display if this is the current chat
-        if self.chat_context == "dm" and self.selected_username == other_user:
+        if other_port is None:
+            return
+
+        # Initialize history if needed
+        if other_port not in self.dm_histories:
+            self.dm_histories[other_port] = []
+            # Add conversation header
+            self.dm_histories[other_port].append(
+                ("System", f"Conversation with {other_user}", timestamp)
+            )
+
+        # Add to history with proper direction indicator
+        direction = "You" if sender == my_username else other_user
+        self.dm_histories[other_port].append((direction, message, timestamp))
+
+        # Update display if viewing this conversation
+        if (self.chat_context == "dm" and
+                hasattr(self, 'selected_port') and
+                self.selected_port == other_port):
             self.display_dm_history(other_user)
 
-    def request_dm_history(self, username):
-        """Request DM history for a specific username"""
-        if self.network_handler:
-            self.network_handler.send_message(f"REQUEST_DM_HISTORY:{username}")
+    def request_dm_history(self, other_username):
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
+        if my_username and other_username:
+            # Request history between both users!
+            self.network_handler.send_message(f"REQUEST_DM_HISTORY:{my_username}:{other_username}")
 
     def add_dm_history(self, sender, recipient, content, timestamp):
         """Properly organize historical DMs by conversation"""
-        my_username = self.network_handler.username_map.get(str(self.network_handler.get_port()))
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
 
         # Determine which user this conversation is with
-        other_user = recipient if sender == my_username else sender
+        if sender == my_username:
+            other_user = recipient
+        else:
+            other_user = sender
 
         # Initialize history if needed
         if other_user not in self.dm_histories:
@@ -483,16 +544,21 @@ class GUI:
         self.dm_histories[other_user].append((direction, content, timestamp))
 
         # Update display if viewing this conversation
-        if self.chat_context == "dm" and self.network_handler.username_map.get(str(self.selected_port)) == other_user:
+        if (self.chat_context == "dm" and
+                hasattr(self, 'selected_username') and
+                self.selected_username == other_user):
             self.display_dm_history(other_user)
 
     def load_dm_history(self):
-        """Request DM history from server"""
+        """Request DM history from server for all known users"""
         if hasattr(self.network_handler, 'username_map'):
             my_port = str(self.network_handler.get_port())
             my_username = self.network_handler.username_map.get(my_port)
             if my_username and not my_username.startswith("Guest_"):
-                self.network_handler.send_message(f"REQUEST_DM_HISTORY:{my_username}")
+                # Request history for all authenticated users
+                for port, username in self.network_handler.username_map.items():
+                    if (not username.startswith("Guest_")) and port != my_port:
+                        self.request_dm_history(username)
 
     def load_known_users_history(self):
         """Fetch history for known authenticated users"""

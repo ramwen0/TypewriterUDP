@@ -192,6 +192,21 @@ def get_dm_history(username):
     conn.close()
     return history
 
+def get_dm_history_between(user1, user2):
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT sender_username, recipient_username, message, timestamp
+        FROM dm_histories
+        WHERE
+            (sender_username=? AND recipient_username=?) OR
+            (sender_username=? AND recipient_username=?)
+        ORDER BY timestamp
+    """, (user1, user2, user2, user1))
+    history = cursor.fetchall()
+    conn.close()
+    return history
+
 def update_user_port(username, port):
     conn = sqlite3.connect("userdata.db")
     cursor = conn.cursor()
@@ -310,8 +325,8 @@ while True:
                 print("DM parse error: ", e)
         elif message_str.startswith("REQUEST_DM_HISTORY:"):
             try:
-                _, username = message_str.split(":", 1)
-                history = get_dm_history(username)
+                _, user1, user2 = message_str.split(":", 2)
+                history = get_dm_history_between(user1, user2)
                 for msg in history:
                     history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
                     server_socket.sendto(history_msg.encode(), (client_ip, client_port))
