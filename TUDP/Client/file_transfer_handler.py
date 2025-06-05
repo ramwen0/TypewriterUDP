@@ -1,11 +1,22 @@
 import socket
 import threading
 import os
+def find_free_port(base_port, max_port):
+    for p in range(base_port, max_port + 1):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind(('0.0.0.0', p))
+            s.close()
+            return p
+        except OSError:
+            continue
+    raise Exception("A free port was not found.")
+
 
 class FileTransferHandler:
     def __init__(self, gui, port):
         self.gui = gui
-        self.listen_port = 12347 #(port + 10000) % 65536 # Use a different port for file transfer
+        self.listen_port = find_free_port(12346, 20000)
         self.server_thread = threading.Thread(target=self.start_server, daemon=True)
         self.server_thread.start()
 
@@ -51,14 +62,8 @@ class FileTransferHandler:
         filename = os.path.basename(filepath)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            # Verificar se o IP é válido (não localhost)
-            if ip == "127.0.0.1" or ip == "localhost" or ip.startswith("192.168."):
-                print(f"Aviso: Possível erro de IP. Usando IP remoto: {ip}")
-
-            # Usar a porta fixa do servidor do destinatário
-            target_port = 12347
-            print(f"Conectando a {ip}:{target_port} para enviar {filename}")
-            sock.connect((ip, target_port))
+            print(f"Conecting to {ip}:{port} to send {filename}")
+            sock.connect((ip, port))
             sock.send(f"{filename}|{filesize}".encode())
             resp = sock.recv(1024)
             if resp != b"ACCEPT":
@@ -72,7 +77,7 @@ class FileTransferHandler:
                     sock.sendall(data)
             self.gui.notify_file_sent(filename)
         except Exception as e:
-            print(f"Erro na transferência: {e}")
+            print(f"Error in download: {e}")
             self.gui.notify_file_transfer_error(filename, str(e))
         finally:
             sock.close()
