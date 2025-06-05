@@ -1,22 +1,11 @@
 import socket
 import threading
 import os
-def find_free_port(base_port, max_port):
-    for p in range(base_port, max_port + 1):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.bind(('0.0.0.0', p))
-            s.close()
-            return p
-        except OSError:
-            continue
-    raise Exception("A free port was not found.")
-
 
 class FileTransferHandler:
     def __init__(self, gui, port):
         self.gui = gui
-        self.listen_port = find_free_port(12346, 20000)
+        self.listen_port = port
         self.server_thread = threading.Thread(target=self.start_server, daemon=True)
         self.server_thread.start()
 
