@@ -478,17 +478,25 @@ class GUI:
 
     # ==== File transfer methods ==== #
     def on_file_button(self):
-        if self.chat_context != "dm" or not self.selected_port:
+        if not self.network_handler:
             return
         filepath = filedialog.askopenfilename()
         if not filepath:
             return
         filesize = os.path.getsize(filepath)
         filename = os.path.basename(filepath)
-        # Notify recipient via UDP
-        self.network_handler.send_file_request(self.selected_port, filename, filesize)
-        # Store for sending after accept
-        self.pending_file = (self.selected_port, filepath, filename, filesize)
+
+        if self.chat_context == "dm" and self.selected_port:
+            # Send file request to the selected DM recipient
+            self.network_handler.send_file_request(self.selected_port, filename, filesize)
+            self.pending_file = (self.selected_port, filepath, filename, filesize)
+        elif self.chat_context == "all":
+            # Send file request to all clients in the all chat except self
+            my_port = str(self.network_handler.get_port())
+            for port in self.network_handler.user_map:
+                if port != my_port:
+                    self.network_handler.send_file_request(port, filename, filesize)
+            self.pending_file = ("all", filepath, filename, filesize)
 
     def on_file_request(self, from_port, filename, filesize):
         # Ask user to accept or reject
@@ -500,33 +508,50 @@ class GUI:
             pass
 
     def on_file_response(self, to_port, status):
-        if hasattr(self, "pending_file") and self.pending_file[0] == to_port:
+        if hasattr(self, "pending_file"):
             pending_file_details = self.pending_file
-            # Remover pending_file imediatamente para evitar condições de corrida ou reenvios
-            del self.pending_file
 
-            if status == "ACCEPT":
-                ip = self.network_handler.port_ip_map.get(to_port)
-                if not ip:
-                    tk.messagebox.showerror("Erro", f"IP do destinatário ({to_port}) não encontrado.")
-                    return
-
+            if pending_file_details[0] == "all":
+                # If the file was sent to all, we can receive multiple responses
                 _, filepath, filename, _ = pending_file_details
-
-                recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
-
-                print(
-                    f"GUI.on_file_response: A iniciar thread para enviar {filename} para {ip}:{recipient_file_transfer_listen_port}")
-
-                send_thread = threading.Thread(
-                    target=self.network_handler.file_transfer_handler.send_file,
-                    args=(ip, recipient_file_transfer_listen_port, filepath),
-                    daemon=True
-                )
-                send_thread.start()
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Error", f"Destination IP ({to_port}) not found.")
+                        return
+                    recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
             else:
-                _, _, filename, _ = pending_file_details
-                tk.messagebox.showinfo("Transferência de Ficheiro", f"O destinatário rejeitou o ficheiro '{filename}'.")
+                # Remover pending_file imediatamente para evitar condições de corrida ou reenvios
+                del self.pending_file
+
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Erro", f"IP do destinatário ({to_port}) não encontrado.")
+                        return
+
+                    _, filepath, filename, _ = pending_file_details
+
+                    recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
+
+                    print(
+                        f"GUI.on_file_response: A iniciar thread para enviar {filename} para {ip}:{recipient_file_transfer_listen_port}")
+
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
+                else:
+                    _, _, filename, _ = pending_file_details
+                    tk.messagebox.showinfo("Transferência de Ficheiro", f"O destinatário rejeitou o ficheiro '{filename}'.")
 
     def ask_file_accept(self, filename, filesize):
         return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
