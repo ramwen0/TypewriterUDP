@@ -519,7 +519,8 @@ class GUI:
                     if not ip:
                         tk.messagebox.showerror("Error", f"Destination IP ({to_port}) not found.")
                         return
-                    recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
+                    recipient_file_transfer_listen_port = int(to_port)
+                    print(f"{recipient_file_transfer_listen_port} -> {ip}")
                     send_thread = threading.Thread(
                         target=self.network_handler.file_transfer_handler.send_file,
                         args=(ip, recipient_file_transfer_listen_port, filepath),
@@ -538,7 +539,7 @@ class GUI:
 
                     _, filepath, filename, _ = pending_file_details
 
-                    recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
+                    recipient_file_transfer_listen_port = int(to_port)
 
                     print(
                         f"GUI.on_file_response: A iniciar thread para enviar {filename} para {ip}:{recipient_file_transfer_listen_port}")
