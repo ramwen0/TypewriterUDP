@@ -108,7 +108,7 @@ class NetworkHandler:
                     listen_port = int(parts[3]) if status == "ACCEPT" and len(parts) > 3 else None
                     if self.gui and hasattr(self.gui, "on_file_response"):
                         self.gui.root.after(0, self.gui.on_file_response, to_port, status, listen_port)
-                continue
+                    continue
 
                 # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
