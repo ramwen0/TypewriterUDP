@@ -192,5 +192,6 @@ class NetworkHandler:
         self.client_socket.sendto(msg.encode(), self.server_address)
 
     def send_file_response(self, sender_port, accepted):
+        listen_port = self.file_transfer_handler.listen_port if accepted else ""
         msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}:{listen_port if accepted else ''}"
         self.client_socket.sendto(msg.encode(), self.server_address)
