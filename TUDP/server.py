@@ -292,46 +292,74 @@ while True:
             continue
 
         # Handle DM's
-        if message_str.startswith("DM:"):
-            try:
-                _, recipient_port, dm_content = message_str.split(":", 2)
-                recipient_port = int(recipient_port)
-                with clients_lock:
-                    sender_name = client_users.get(client_port, str(client_port))
-                    recipient_name = client_users.get(recipient_port, str(recipient_port))
-                    if recipient_port in clients:
-                        dm_msg = f"DM:{client_port}:{dm_content}"
-                        server_socket.sendto(dm_msg.encode(), (clients[recipient_port][0], recipient_port))
-
-                        # Store in database if both users are authenticated (not guests)
-                        if not sender_name.startswith("Guest_") and not recipient_name.startswith("Guest_"):
-                            conn = sqlite3.connect("userdata.db")
-                            cursor = conn.cursor()
-                            cursor.execute("""
-                                           INSERT INTO dm_histories (sender_username, recipient_username, message)
-                                           VALUES (?, ?, ?)
-                                           """, (sender_name, recipient_name, dm_content))
-                            conn.commit()
-                            conn.close()
-
-                        # Notify both parties
-                        notify_dm = f"DM_NOTIFY:{client_port}:{recipient_port}"
-                        server_socket.sendto(notify_dm.encode(), (clients[recipient_port][0], recipient_port))
-                        server_socket.sendto(notify_dm.encode(), (client_ip, client_port))
-            except Exception as e:
-                print("DM parse error: ", e)
-        elif message_str.startswith("REQUEST_DM_HISTORY:"):
-            try:
-                parts = message_str.split(":")
-                if len(parts) == 3:  # REQUEST_DM_HISTORY:user1:user2
-                    _, user1, user2 = parts
-                    history = get_dm_history_between(user1, user2)
+        if any(message_str.startswith(prefix) for prefix in [
+            "REQUEST_DM_HISTORY:",
+            "REQUEST_MY_DM_HISTORY:",
+            "DM:"
+        ]):
+            # Process but don't broadcast
+            if message_str.startswith("REQUEST_MY_DM_HISTORY:"):
+                try:
+                    _, username = message_str.split(":", 1)
+                    history = get_dm_history(username)
                     for msg in history:
                         history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
                         server_socket.sendto(history_msg.encode(), (client_ip, client_port))
-            except ValueError as e:
-                print(f"Error processing DM history request: {e}")
-                continue
+                except ValueError as e:
+                    print(f"Error processing MY_DM_HISTORY: {e}")
+                continue  # Skip broadcasting
+            if message_str.startswith("DM:"):
+                try:
+                    _, recipient_port, dm_content = message_str.split(":", 2)
+                    recipient_port = int(recipient_port)
+                    with clients_lock:
+                        sender_name = client_users.get(client_port, str(client_port))
+                        recipient_name = client_users.get(recipient_port, str(recipient_port))
+                        if recipient_port in clients:
+                            dm_msg = f"DM:{client_port}:{dm_content}"
+                            server_socket.sendto(dm_msg.encode(), (clients[recipient_port][0], recipient_port))
+
+                            # Store in DB if both users are authenticated
+                            if not sender_name.startswith("Guest_") and not recipient_name.startswith("Guest_"):
+                                conn = sqlite3.connect("userdata.db")
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                               INSERT INTO dm_histories (sender_username, recipient_username, message)
+                                               VALUES (?, ?, ?)
+                                               """, (sender_name, recipient_name, dm_content))
+                                conn.commit()
+                                conn.close()
+
+                            # Notify both parties
+                            notify_dm = f"DM_NOTIFY:{client_port}:{recipient_port}"
+                            server_socket.sendto(notify_dm.encode(), (clients[recipient_port][0], recipient_port))
+                            server_socket.sendto(notify_dm.encode(), (client_ip, client_port))
+                except Exception as e:
+                    print("DM parse error: ", e)
+
+            elif message_str.startswith("REQUEST_DM_HISTORY:"):
+                try:
+                    parts = message_str.split(":")
+                    if len(parts) == 3:  # REQUEST_DM_HISTORY:user1:user2
+                        _, user1, user2 = parts
+                        history = get_dm_history_between(user1, user2)
+                        for msg in history:
+                            history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
+                            server_socket.sendto(history_msg.encode(), (client_ip, client_port))
+                except ValueError as e:
+                    print(f"Error processing DM history request: {e}")
+
+            elif message_str.startswith("REQUEST_MY_DM_HISTORY:"):
+                try:
+                    _, username = message_str.split(":", 1)
+                    history = get_dm_history(username)
+                    for msg in history:
+                        history_msg = f"DM_HISTORY:{msg[0]}:{msg[1]}:{msg[2]}:{msg[3]}"
+                        server_socket.sendto(history_msg.encode(), (client_ip, client_port))
+                except ValueError as e:
+                    print(f"Error processing MY_DM_HISTORY request: {e}")
+
+            continue  # Skip broadcasting these messages to all clients
 
         # Broadcast regular messages with sender info
         with clients_lock:

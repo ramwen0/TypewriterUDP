@@ -32,16 +32,26 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
+                # ==== Skip ==== #
+                if (
+                        message.startswith("REQUEST_DM_HISTORY:") or
+                        message.startswith("REQUEST_MY_DM_HISTORY:") or
+                        message.startswith("DM:")
+                ):
+                    continue  # Ignore these messages in the UI
                 # ==== DM history ==== #
-                if message.startswith("DM_HISTORY:"):
+                if message.startswith("DM_HISTORY:"):  # Keep processing history responses
                     try:
                         _, sender, recipient, content, timestamp = message.split(":", 4)
-                        if self.gui:
-                            if hasattr(self.gui, "process_dm_history"):
-                                self.gui.root.after(0, self.gui.process_dm_history,
-                                                    sender, recipient, content, timestamp)
+                        if self.gui and hasattr(self.gui, "process_dm_history"):
+                            self.gui.root.after(0, self.gui.process_dm_history,
+                                                sender, recipient, content, timestamp)
                     except ValueError:
                         continue
+
+                    # ==== Skip REQUEST_DM_HISTORY from appearing in all chat ==== #
+                elif message.startswith("REQUEST_DM_HISTORY:"):
+                    continue  # Ignore these messages in the UI
                 # ==== DM Notify ==== #
                 elif message.startswith("DM_NOTIFY:"):
                     _, from_port, to_port = message.split(":", 2)

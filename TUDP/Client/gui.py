@@ -97,7 +97,7 @@ class AuthGUI:
 
             # Load DM history after GUI is ready
             self.root.after(1000, lambda: (
-                self.network_handler.send_message("REQUEST_MY_DM_HISTORY")
+                self.network_handler.send_message("REQUEST_DM_HISTORY")
             ))
         else:
             messagebox.showerror("Error", msg)
@@ -633,6 +633,12 @@ class GUI:
         message = self.message_entry.get()
         if not message or not self.network_handler:
             return
+
+        if isinstance(message, str) and message.upper().startswith(
+                ("REQUEST_DM_HISTORY:", "REQUEST_MY_DM_HISTORY:", "DM:")
+        ):
+            return
+
         self.clear_typing_text("You", context=self.chat_context)
         self.message_entry.delete(0, tk.END)
         timestamp = datetime.now().strftime("%H:%M")
