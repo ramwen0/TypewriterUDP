@@ -521,7 +521,7 @@ class GUI:
                         return
                     send_thread = threading.Thread(
                         target=self.network_handler.file_transfer_handler.send_file,
-                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        args=(ip, listen_port, filepath),
                         daemon=True
                     )
                     send_thread.start()
