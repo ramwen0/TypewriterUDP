@@ -102,10 +102,13 @@ class NetworkHandler:
                         self.gui.root.after(0, self.gui.on_file_request, from_port, filename, int(filesize))
                     continue
                 elif message.startswith("FILE_RES:"):
-                    _, to_port, status = message.split(":", 2)
+                    parts = message.split(":", 3)
+                    to_port = parts[1]
+                    status = parts[2]
+                    listen_port = int(parts[3]) if status == "ACCEPT" and len(parts) > 3 else None
                     if self.gui and hasattr(self.gui, "on_file_response"):
-                        self.gui.root.after(0, self.gui.on_file_response, to_port, status)
-                    continue
+                        self.gui.root.after(0, self.gui.on_file_response, to_port, status, listen_port)
+                continue
 
                 # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
@@ -189,5 +192,5 @@ class NetworkHandler:
         self.client_socket.sendto(msg.encode(), self.server_address)
 
     def send_file_response(self, sender_port, accepted):
-        msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}"
+        msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}:{listen_port if accepted else ''}"
         self.client_socket.sendto(msg.encode(), self.server_address)
