@@ -507,7 +507,7 @@ class GUI:
             # FileTransferHandler will handle the TCP connection
             pass
 
-    def on_file_response(self, to_port, status, listen_port=None):
+    def on_file_response(self, to_port, status):
         if hasattr(self, "pending_file"):
             pending_file_details = self.pending_file
 
@@ -516,12 +516,13 @@ class GUI:
                 _, filepath, filename, _ = pending_file_details
                 if status == "ACCEPT":
                     ip = self.network_handler.port_ip_map.get(to_port)
-                    if not ip or not listen_port:
+                    if not ip:
                         tk.messagebox.showerror("Error", f"Destination IP ({to_port}) not found.")
                         return
+                    recipient_file_transfer_listen_port = self.network_handler.file_transfer_handler.listen_port
                     send_thread = threading.Thread(
                         target=self.network_handler.file_transfer_handler.send_file,
-                        args=(ip, listen_port, filepath),
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
                         daemon=True
                     )
                     send_thread.start()

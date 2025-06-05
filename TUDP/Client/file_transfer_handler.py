@@ -6,6 +6,7 @@ class FileTransferHandler:
     def __init__(self, gui, port):
         self.gui = gui
         self.listen_port = port
+        print(f"File transfer handler initialized on port {self.listen_port}")
         self.server_thread = threading.Thread(target=self.start_server, daemon=True)
         self.server_thread.start()
 
