@@ -1,17 +1,21 @@
-TUDP/Client/__pycache__/network_handler.cpython-313.pyc
-TUDP/Client/__pycache__/gui.cpython-313.pyc
-TUDP/Client/__pycache__/file_transfer_handler.cpython-313.pyc
-TUDP/Client/__pycache__/app.cpython-313.pyc
-TUDP/.idea/TUDP.iml
-TUDP/.idea/misc.xml
-TUDP/.idea/dataSources.xml
-TUDP/.idea/TUDP.iml
-TUDP/.idea/misc.xml
-TUDP/.idea/dataSources.xml
-/TUDP/.idea
-TUDP/.idea/TUDP.iml
-*.xml
-*.xml
-TUDP/.idea/dataSources.xml
-TUDP/.idea/misc.xml
-TUDP/.idea/TUDP.iml
+# JetBrains IDE folder
+.idea/
+
+# Byte-compiled / CPython cache files
+**/__pycache__/
+
+# Log files
+*.log
+# But keep this specific log file
+!important.log
+
+# Build artifacts
+build/
+
+# Temporary files and editor backups
+**/*.tmp
+*~
+#*#
+
+# OS-generated files
+.DS_Store

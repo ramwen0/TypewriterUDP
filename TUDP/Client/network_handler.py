@@ -13,8 +13,11 @@ class NetworkHandler:
         self.receive_thread = None
         self.gui = None
         self.username_map = {}
+
         self.file_transfer_handler = None
         self.port_ip_map = {}  # Maps ports to IP addresses for file transfers
+
+        self.known_user_map = {}
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -34,14 +37,34 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
+                # ==== Skip ==== #
+                if (
+                        message.startswith("REQUEST_DM_HISTORY:") or
+                        message.startswith("REQUEST_MY_DM_HISTORY:") or
+                        message.startswith("DM:")
+                ):
+                    continue  # Ignore these messages in the UI
+                # ==== DM history ==== #
+                if message.startswith("DM_HISTORY:"):  # Keep processing history responses
+                    try:
+                        _, sender, recipient, content, timestamp = message.split(":", 4)
+                        if self.gui and hasattr(self.gui, "process_dm_history"):
+                            self.gui.root.after(0, self.gui.process_dm_history,
+                                                sender, recipient, content, timestamp)
+                    except ValueError:
+                        continue
+
+                    # ==== Skip REQUEST_DM_HISTORY from appearing in all chat ==== #
+                elif message.startswith("REQUEST_DM_HISTORY:"):
+                    continue  # Ignore these messages in the UI
                 # ==== DM Notify ==== #
-                if message.startswith("DM_NOTIFY:"):
+                elif message.startswith("DM_NOTIFY:"):
                     _, from_port, to_port = message.split(":", 2)
                     if self.gui and hasattr(self.gui, "dm_notify"):
                         self.gui.dm_notify(from_port, to_port)
                         continue
                 # ==== DM messages ==== #
-                if message.startswith("DM:"):
+                elif message.startswith("DM:"):
                     try:
                         _, sender_port, dm_content = message.split(":", 2)
                         sender = self.username_map.get(sender_port, f"User {sender_port}")
@@ -58,6 +81,11 @@ class NetworkHandler:
                 elif message.startswith("AUTH_RESULT:"):
                     _, status, msg = message.split(":", 2)
                     success = status == "OK"
+                    if success:
+                        if "logged in as " in msg:
+                            username = msg.split("logged in as ")[-1]
+                        elif "registered successfully" in msg:
+                            username = msg.split("registered successfully")[-1]
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
                 # ==== Server messages ==== #
@@ -67,6 +95,7 @@ class NetworkHandler:
                             try:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
+                                self.known_user_map.update(self.username_map)
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
@@ -87,7 +116,11 @@ class NetworkHandler:
                                     else:
                                         new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
                                 self.username_map = new_map  # Replace completely rather than update
+
                                 self.port_ip_map = new_ip_map  # Update IP map
+
+                                self.known_user_map.update(new_map)
+
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
