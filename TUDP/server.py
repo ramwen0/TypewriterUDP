@@ -24,7 +24,7 @@ buffer_size = 1024
 # Track clients: {port: (ip, last_active)}
 clients = {}
 client_users = {} # Track usernames
-clients_lock = threading.Lock()
+clients_lock = threading.RLock()
 
 # server setup
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -92,7 +92,7 @@ def periodic_client_updates():
             if clients:  # Only send if there are clients
                 client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
                 client_list = ",".join(client_info)
-        broadcast(f"[Server] CLIENTS:{client_list}")
+                broadcast(f"[Server] CLIENTS:{client_list}")
 # Start periodic updates thread
 update_thread = threading.Thread(target=periodic_client_updates, daemon=True)
 update_thread.start()

@@ -253,8 +253,6 @@ class GUI:
         input_frame = ttk.Frame(bottom_frame, style='Dark.TFrame', width=300)
         input_frame.pack(side="left", fill="both", expand=False)
         input_frame.pack_propagate(False)
-        self.typing_label = ttk.Label(input_frame, text="", style='Dark.TFrame', foreground="#888888")
-        self.typing_label.pack(side="left")
         self.message_entry = ttk.Entry(input_frame, font=('Helvetica', 10), style='Dark.TEntry')
         self.message_entry.pack(fill="x", expand=True)
         self.message_entry.bind('<KeyRelease>', self.on_typing)
