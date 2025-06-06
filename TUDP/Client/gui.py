@@ -528,13 +528,12 @@ class GUI:
                     )
                     send_thread.start()
             else:
-                # Remover pending_file imediatamente para evitar condições de corrida ou reenvios
                 del self.pending_file
 
                 if status == "ACCEPT":
                     ip = self.network_handler.port_ip_map.get(to_port)
                     if not ip:
-                        tk.messagebox.showerror("Erro", f"IP do destinatário ({to_port}) não encontrado.")
+                        tk.messagebox.showerror("Erro", f"Recipient IP ({to_port}) not found.")
                         return
 
                     _, filepath, filename, _ = pending_file_details
@@ -542,7 +541,7 @@ class GUI:
                     recipient_file_transfer_listen_port = int(to_port)
 
                     print(
-                        f"GUI.on_file_response: A iniciar thread para enviar {filename} para {ip}:{recipient_file_transfer_listen_port}")
+                        f"GUI.on_file_response: Starting thread to send {filename} to {ip}:{recipient_file_transfer_listen_port}")
 
                     send_thread = threading.Thread(
                         target=self.network_handler.file_transfer_handler.send_file,
@@ -552,7 +551,7 @@ class GUI:
                     send_thread.start()
                 else:
                     _, _, filename, _ = pending_file_details
-                    tk.messagebox.showinfo("Transferência de Ficheiro", f"O destinatário rejeitou o ficheiro '{filename}'.")
+                    tk.messagebox.showinfo("File Transfer", f"The recipient rejected the file '{filename}'.")
 
     def ask_file_accept(self, filename, filesize):
         return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
@@ -571,4 +570,4 @@ class GUI:
 
 
     def notify_file_transfer_error(self, filename, error_message):
-        tk.messagebox.showerror("Erro na Transferência de Ficheiro", f"Erro ao transferir '{filename}': {error_message}")
+        tk.messagebox.showerror("Erro in File Transfer", f"Error downloading '{filename}': {error_message}")
