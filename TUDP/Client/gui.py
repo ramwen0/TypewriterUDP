@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 from datetime import datetime
+import os
+import threading
 
 class AuthGUI:
     def __init__(self, root, network_handler):
@@ -259,7 +261,7 @@ class GUI:
         self.message_entry.bind('<Return>', self.send_message)
 
         # File send Button
-        self.file_btn = ttk.Button(bottom_frame, text="File", style='Dark.TButton', width=100)
+        self.file_btn = ttk.Button(bottom_frame, text="File", style='Dark.TButton', width=100, command=self.on_file_button)
         self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
         self.file_btn.pack_propagate(False)
 
@@ -663,3 +665,100 @@ class GUI:
             self.chat_display.insert(tk.END, f"{msg}\n", 'message')
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         self.chat_display.config(state='disabled')
+
+
+    # ==== File transfer methods ==== #
+    def on_file_button(self):
+        if not self.network_handler:
+            return
+        filepath = filedialog.askopenfilename()
+        if not filepath:
+            return
+        filesize = os.path.getsize(filepath)
+        filename = os.path.basename(filepath)
+
+        if self.chat_context == "dm" and self.selected_port:
+            # Send file request to the selected DM recipient
+            self.network_handler.send_file_request(self.selected_port, filename, filesize)
+            self.pending_file = (self.selected_port, filepath, filename, filesize)
+        elif self.chat_context == "all":
+            # Send file request to all clients in the all chat except self
+            my_port = str(self.network_handler.get_port())
+            for port in self.network_handler.username_map:
+                if port != my_port:
+                    self.network_handler.send_file_request(port, filename, filesize)
+            self.pending_file = ("all", filepath, filename, filesize)
+
+    def on_file_request(self, from_port, filename, filesize):
+        # Ask user to accept or reject
+        accept = tk.messagebox.askyesno("File Transfer",
+                                        f"{from_port} wants to send you '{filename}' ({filesize} bytes). Accept?")
+        self.network_handler.send_file_response(from_port, accept)
+        if accept:
+            # FileTransferHandler will handle the TCP connection
+            pass
+
+    def on_file_response(self, to_port, status):
+        if hasattr(self, "pending_file"):
+            pending_file_details = self.pending_file
+
+            if pending_file_details[0] == "all":
+                # If the file was sent to all, we can receive multiple responses
+                _, filepath, filename, _ = pending_file_details
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Error", f"Destination IP ({to_port}) not found.")
+                        return
+                    recipient_file_transfer_listen_port = int(to_port)
+                    print(f"{recipient_file_transfer_listen_port} -> {ip}")
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
+            else:
+                del self.pending_file
+
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Erro", f"Recipient IP ({to_port}) not found.")
+                        return
+
+                    _, filepath, filename, _ = pending_file_details
+
+                    recipient_file_transfer_listen_port = int(to_port)
+
+                    print(
+                        f"GUI.on_file_response: Starting thread to send {filename} to {ip}:{recipient_file_transfer_listen_port}")
+
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
+                else:
+                    _, _, filename, _ = pending_file_details
+                    tk.messagebox.showinfo("File Transfer", f"The recipient rejected the file '{filename}'.")
+
+    def ask_file_accept(self, filename, filesize):
+        return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
+
+    def ask_save_path(self, filename):
+        return filedialog.asksaveasfilename(initialfile=filename)
+
+    def notify_file_received(self, filename, path):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' received and saved to {path}")
+
+    def notify_file_sent(self, filename):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' sent successfully.")
+
+    def notify_file_rejected(self, filename):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' was rejected by the recipient.")
+
+
+    def notify_file_transfer_error(self, filename, error_message):
+        tk.messagebox.showerror("Erro in File Transfer", f"Error downloading '{filename}': {error_message}")

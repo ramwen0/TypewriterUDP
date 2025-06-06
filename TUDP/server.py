@@ -17,7 +17,7 @@ class Colors:
 
 
 # Config
-local_IP = "127.0.0.1"
+local_IP = "0.0.0.0"
 local_port = 12345
 buffer_size = 1024
 
@@ -90,7 +90,7 @@ def periodic_client_updates():
         time.sleep(5)  # Update interval (5 seconds)
         with clients_lock:
             if clients:  # Only send if there are clients
-                client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
+                client_info = [f"{p}:{client_users.get(p, '')}:{clients[p][0]}" for p in clients]
                 client_list = ",".join(client_info)
                 broadcast(f"[Server] CLIENTS:{client_list}")
 # Start periodic updates thread
@@ -109,7 +109,7 @@ def handle_auth(message_str, client_ip, client_port):
 
         # Build complete client list
         with clients_lock:
-            client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
+            client_info = [f"{p}:{client_users.get(p, '')}:{clients[p][0]}" for p in clients]
             client_list = ",".join(client_info)
 
         # Send username assignment and full client list to ALL clients
@@ -163,7 +163,7 @@ def handle_auth(message_str, client_ip, client_port):
 
                 # Build updated client list
                 with clients_lock:
-                    client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
+                    client_info = [f"{p}:{client_users.get(p, '')}:{clients[p][0]}" for p in clients]
                     client_list = ",".join(client_info)
 
                 # Update ALL clients
@@ -360,6 +360,32 @@ while True:
                     print(f"Error processing MY_DM_HISTORY request: {e}")
 
             continue  # Skip broadcasting these messages to all clients
+
+        # Handle file transfer requests
+        if message_str.startswith("FILE_REQ:"):
+            try:
+                _, recipient_port, filename, filesize = message_str.split(":", 3)
+                recipient_port = int(recipient_port)
+                if recipient_port in clients:
+                    # Forward to recipient
+                    server_socket.sendto(f"FILE_REQ:{client_port}:{filename}:{filesize}".encode(),
+                                         (clients[recipient_port][0], recipient_port))
+            except Exception as e:
+                print("File req error:", e)
+            continue
+
+        # Handle file transfer responses
+        if message_str.startswith("FILE_RES:"):
+            try:
+                _, sender_port, status = message_str.split(":", 2)
+                sender_port = int(sender_port)
+                if sender_port in clients:
+                    # Forward to sender
+                    server_socket.sendto(f"FILE_RES:{client_port}:{status}".encode(),
+                                         (clients[sender_port][0], sender_port))
+            except Exception as e:
+                print("File res error:", e)
+            continue
 
         # Broadcast regular messages with sender info
         with clients_lock:

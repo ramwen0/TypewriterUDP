@@ -2,16 +2,21 @@ import socket
 import threading
 import hashlib
 from datetime import datetime
+from file_transfer_handler import FileTransferHandler
 
 class NetworkHandler:
     def __init__(self):
-        self.server_address = ("127.0.0.1", 12345)
+        self.server_address = ("85.243.194.132", 12345)
         self.buffer_size = 1024
         self.client_socket = None
         self.running = True
         self.receive_thread = None
         self.gui = None
         self.username_map = {}
+
+        self.file_transfer_handler = None
+        self.port_ip_map = {}  # Maps ports to IP addresses for file transfers
+
         self.known_user_map = {}
 
     def setup_network(self):
@@ -99,20 +104,42 @@ class NetworkHandler:
                             try:
                                 client_info = message.split("CLIENTS:")[1].split(",")
                                 new_map = {}
+                                new_ip_map = {}
                                 for entry in client_info:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
                                         new_map[port] = username if username else f"Guest_{port}"
+
+                                        if len(entry.split(":")) == 3:
+                                            _, _, ip = entry.split(":")
+                                            new_ip_map[port] = ip  # Store IP for file transfers
                                     else:
                                         new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
                                 self.username_map = new_map  # Replace completely rather than update
+
+                                self.port_ip_map = new_ip_map  # Update IP map
+
                                 self.known_user_map.update(new_map)
+
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
                                 continue
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
+
+                # ==== File transfer notifications ==== #
+                elif message.startswith("FILE_REQ:"):
+                    _, from_port, filename, filesize = message.split(":", 3)
+                    if self.gui and hasattr(self.gui, "on_file_request"):
+                        self.gui.root.after(0, self.gui.on_file_request, from_port, filename, int(filesize))
+                    continue
+                elif message.startswith("FILE_RES:"):
+                    _, to_port, status = message.split(":", 2)
+                    if self.gui and hasattr(self.gui, "on_file_response"):
+                        self.gui.root.after(0, self.gui.on_file_response, to_port, status)
+                    continue
+
                 # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
                     try:
@@ -137,16 +164,17 @@ class NetworkHandler:
                                 sender = self.username_map.get(port.strip(), port.strip())
 
                         # Display the message
-                        self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
-                        if not self.gui.chat_context == 'all':
-                            self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
-                        else:
-                            self.gui.all_chat_btn.configure(text="All Chat")
+                        if hasattr(self.gui, "display_message") and sender and content:
+                            self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+                            if not self.gui.chat_context == 'all':
+                                self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
+                            else:
+                                self.gui.all_chat_btn.configure(text="All Chat")
 
-                        # Clear typing indicator if we have port info
-                        if hasattr(self.gui, 'clear_typing_text'):
-                            if sender.strip().isdigit():  # If sender is a port number
-                                self.gui.clear_typing_text(int(sender.strip()))
+                            # Clear typing indicator if we have port info
+                            if hasattr(self.gui, 'clear_typing_text'):
+                                if sender.strip().isdigit():  # If sender is a port number
+                                    self.gui.clear_typing_text(int(sender.strip()))
                     except (ValueError, IndexError):
                         continue
 
@@ -187,3 +215,12 @@ class NetworkHandler:
             self.client_socket.sendto(f"disconnect @{port}".encode(), self.server_address)
             self.running = False
             self.client_socket.close()
+
+    # File Transfer Methods
+    def send_file_request(self, recipient_port, filename, filesize):
+        msg = f"FILE_REQ:{recipient_port}:{filename}:{filesize}"
+        self.client_socket.sendto(msg.encode(), self.server_address)
+
+    def send_file_response(self, sender_port, accepted):
+        msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}"
+        self.client_socket.sendto(msg.encode(), self.server_address)
