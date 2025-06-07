@@ -106,7 +106,7 @@ class GUI:
         self.w_size = [w_aspect_ratio[0] * w_scale, w_aspect_ratio[1] * w_scale]
 
         self.root.geometry(str(self.w_size[0]) + "x" + str(self.w_size[1]))
-        self.root.minsize(int(self.w_size[0] * 0.70), int(self.w_size[1] * 1))
+        self.root.minsize(int(self.w_size[0] * 0.80), int(self.w_size[1] * 0.8))
         
         self.root.resizable(True, True)
         
@@ -142,10 +142,10 @@ class GUI:
         style.theme_use('clam')
 
         # Configure styles
-        style.configure('Dark.TFrame', background=self.bg_color, borderwidth = 10, relief = tk.GROOVE)
-        style.configure('Sidebar.TFrame', background=self.sidebar_color)
-        style.configure('Dark.TEntry',
-                        fieldbackground=self.entry_bg,
+        style.configure('Dark.TFrame', background=self.bg_color)#, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Sidebar.TFrame', background=self.sidebar_color)#, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Dark.TEntry', borderwidth = 0,
+                        fieldbackground=self.sidebar_color,
                         foreground=self.text_fg,
                         insertcolor=self.text_fg,
                         bordercolor="#444",
@@ -183,6 +183,14 @@ class GUI:
                         background=self.bg_color,
                         foreground=self.text_fg,
                         font=('Segoe UI', 12, 'bold'))
+        style.configure('Sidebar.TLabel', 
+                        background = self.sidebar_color,
+                        foreground = self.text_fg,
+                        font = ('Segoe UI', 12, 'bold'))
+        style.configure('Sidebar.TList', 
+                        bg = self.entry_bg, fg = self.text_fg,
+                        selectbackground = self.accent_color, selectforeground = "white",
+                        font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
 
     def setup_ui(self, initial_port=None):
         # === Defining Main Frame ===
@@ -192,23 +200,54 @@ class GUI:
 
 
         # === Sidebar Frame (leftmost element) ===
-        sidebar_frame = ttk.Frame(main_frame, style='Dark.TFrame', width = self.w_size[0] * 0.19, height = self.w_size[1] * 1)
+        sidebar_frame = ttk.Frame(main_frame, style = 'Dark.TFrame', width = self.w_size[0] * 0.19)
         sidebar_frame.pack(side = "left", fill = "y", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         sidebar_frame.pack_propagate(False)
 
-        # == Sidebar Buttons
-        #self.all_chat_btn = ttk.Button(sidebar_frame, text="All Chat",
-                                       #command=lambda: self.switch_chat_mode('all'),
-                                       #style='Active.TButton' if self.chat_context == 'all' else 'Sidebar.TButton')
-        #self.all_chat_btn.pack(fill="x", pady=5, padx=5)
+        # == Chat Buttons Frame
+        chat_buttons_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.15)
+        chat_buttons_frame.pack(side = "top", fill = "x", pady = (0, self.w_size[1] * 0.01))
+        chat_buttons_frame.pack_propagate(False)
 
-        # == Separator
-        #ttk.Separator(sidebar_frame, orient='horizontal').pack(fill="x")
+        # = All Chat Button
+        self.all_chat_btn = ttk.Button(chat_buttons_frame, text="All Chat",
+                                       command=lambda: self.switch_chat_mode('all'),
+                                       style='Active.TButton' if self.chat_context == 'all' else 'Sidebar.TButton')
+        self.all_chat_btn.pack(fill="x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        
+        # = DM Chat Button
+        self.dms_btn = ttk.Button(chat_buttons_frame, text="DMs",
+                                  command=lambda: self.switch_chat_mode('dm'),
+                                  style='Active.TButton' if self.chat_context == 'dm' else 'Inactive.TButton')
+        self.dms_btn.pack(fill="x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
 
-        #self.dms_btn = ttk.Button(sidebar_frame, text="DMs",
-                                  #command=lambda: self.switch_chat_mode('dm'),
-                                  #style='Active.TButton' if self.chat_context == 'dm' else 'Inactive.TButton')
-        #self.dms_btn.pack(fill="x", pady=5, padx=5)
+        # == Groups Frame
+        groups_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame")
+        groups_frame.pack(side = "top", fill = "both", expand = True, pady = (self.w_size[1] * 0.01, 0))
+        groups_frame.pack_propagate(False)
+
+        # = Groups label Frame
+        groups_label_frame = ttk.Frame(groups_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.05)
+        groups_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        groups_label_frame.pack_propagate(False)
+
+        # - Groups label
+        groups_label = ttk.Label(groups_label_frame, style = "Sidebar.TLabel", text = "Groups List")
+        groups_label.pack(side = "top", fill = "y", expand = True)
+
+        ttk.Separator(groups_label_frame, orient='horizontal').pack(fill="x")
+
+        # = Groups list Frame
+        groups_list_frame = ttk.Frame(groups_frame, style = "Sidebar.TFrame")
+        groups_list_frame.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        groups_list_frame.pack_propagate(False)
+
+        # - Groups list
+        groups_list = tk.Listbox(groups_list_frame,
+                                 bg = self.sidebar_color, fg = self.text_fg,
+                                 selectbackground = self.accent_color, selectforeground = "white",
+                                 font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
+        groups_list.pack(side = "top", fill = "both", expand = True)
 
         #self.group_chats_btn = ttk.Button(sidebar_frame, text="Group Chats", 
                                   #command=lambda: self.switch_chat_mode('groups'), 
@@ -217,23 +256,129 @@ class GUI:
 
 
         # === Main Content Area (middle section) ===
-        content_frame = ttk.Frame(main_frame, style='Dark.TFrame', width = self.w_size[0] * 0.28, height = self.w_size[1] * 1)
+        content_frame = ttk.Frame(main_frame, style = 'Dark.TFrame', width = self.w_size[0] * 0.28)
         content_frame.pack(side = "left", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         content_frame.pack_propagate(False)
 
-        # == Active chat label frame (in top middle section)
-        #active_chat_frame = ttk.Label(content_frame, text="Active Chat", style='Dark.TLabel', width=400)
-        #active_chat_frame.pack(side="top", fill="both", expand=False, pady=(0, 5))
-        
+        # == Active chat frame
+        active_chat_frame = ttk.Frame(content_frame, style = 'Sidebar.TFrame', height = self.w_size[1] * 0.15)
+        active_chat_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = (0, self.w_size[1] * 0.01))
+        active_chat_frame.pack_propagate(False)
+
+        # = Active chat label
+        active_chat_label = ttk.Label(active_chat_frame, text = "Active Chat Name", style = "Sidebar.TLabel")
+        active_chat_label.pack(side = "top", fill = "y", expand = True, anchor = "center")
+
+        # == Chat display frame
+        chat_display_frame = ttk.Frame(content_frame, style = 'Dark.TFrame')
+        chat_display_frame.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        chat_display_frame.pack_propagate(False)
+
+        # = Chat Display
+        self.chat_display = scrolledtext.ScrolledText(
+            chat_display_frame, #wrap=tk.WORD,
+            font=('Helvetica', 10), state='disabled', highlightthickness = 0,
+            bg=self.text_bg, fg=self.text_fg, insertbackground=self.text_fg,
+            selectbackground=self.selection_color, selectforeground=self.text_fg
+        )
+        self.chat_display.pack(fill="both", expand = True)
+
+        # == All Inputs frame
+        all_inputs_frame = ttk.Frame(content_frame, style = 'Sidebar.TFrame', height = self.w_size[1] * 0.1)
+        all_inputs_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = (self.w_size[1] * 0.01, 0))
+        all_inputs_frame.pack_propagate(False)
+
+        # = Input text frame
+        input_frame = ttk.Frame(all_inputs_frame, style = 'Sidebar.TFrame')
+        input_frame.pack(side = "left", fill = "both", expand = True)
+        input_frame.pack_propagate(False)
+
+        # - Input
+        self.message_entry = ttk.Entry(input_frame, font=('Helvetica', 10), style='Dark.TEntry')
+        self.message_entry.pack(fill="both", expand=True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        self.message_entry.bind('<KeyRelease>', self.on_typing)
+        self.message_entry.bind('<Return>', self.send_message)
+
+        # = FIle frame 
+        file_frame = ttk.Frame(all_inputs_frame, style = "Sidebar.TFrame", width = self.w_size[0] * 0.15)
+        file_frame.pack(side = "right", fill = "y", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        file_frame.pack_propagate(False)
+
+        # - File
+        self.file_btn = ttk.Button(file_frame, text="File", style='Dark.TButton', width=100)
+        self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
+        self.file_btn.pack_propagate(False)
+
 
         # === Client List Frame (rightmost element) ===
-        client_frame = ttk.Frame(main_frame, style='Dark.TFrame', width = self.w_size[0] * 0.19, height = self.w_size[1] * 1)
+        client_frame = ttk.Frame(main_frame, style = 'Dark.TFrame', width = self.w_size[0] * 0.19, height = self.w_size[1] * 1)
         client_frame.pack(side = "left", fill = "y", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         client_frame.pack_propagate(False)
 
-        # == Client list Title (Label)
-        #client_label = ttk.Label(client_frame, text="Active Users", style='Dark.TLabel')
-        #client_label.pack(fill="x", expand=False, pady=(0, 5))
+        # == Online Users Frame
+        on_users_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame")
+        on_users_frame.pack(side = "top", fill = "both", expand = True, pady = (0, self.w_size[1] * 0.01))
+        on_users_frame.pack_propagate(False)
+
+        # = Online Users label frame
+        on_users_label_frame = ttk.Frame(on_users_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.05)
+        on_users_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        on_users_label_frame.pack_propagate(False)
+
+        # - Online Users label
+        on_users_label = ttk.Label(on_users_label_frame, style = "Sidebar.TLabel", text = "Online Users")
+        on_users_label.pack(side = "top", fill = "y")
+
+        ttk.Separator(on_users_label_frame, orient='horizontal').pack(fill="x") 
+
+        # = Online Users list Frame
+        on_users_list_frame = ttk.Frame(on_users_frame, style = "Sidebar.TFrame")
+        on_users_list_frame.pack(side = "top", fill = "both", expand = True)
+        on_users_list_frame.pack_propagate(False)
+
+        # - Online Users list
+        self.client_listbox = tk.Listbox(
+            on_users_list_frame, bg=self.sidebar_color, fg=self.text_fg,
+            selectbackground=self.accent_color, selectforeground="white",
+            font=('Helvetica', 9), relief="flat", highlightthickness=0
+        )
+        self.client_listbox.pack(side = "top", fill="both", expand=True)
+        # Bind selection in the list
+        self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
+
+        # == Offline Users / Guests Frame
+        off_users_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame")
+        off_users_frame.pack(side = "top", fill = "both", expand = True, pady = self.w_size[1] * 0.01)
+        off_users_frame.pack_propagate(False)
+
+        # = Offline Users label Frame
+        off_users_label_frame = ttk.Frame(off_users_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.05)
+        off_users_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        off_users_label_frame.pack_propagate(False)
+
+        # - Offline Users label
+        off_users_label = ttk.Label(off_users_label_frame, style = "Sidebar.TLabel", text = "Clients / Offline Users")
+        off_users_label.pack(side = "top", fill = "y")
+
+        ttk.Separator(off_users_label_frame, orient = 'horizontal').pack(fill = "x")
+
+        # = Offline Users list Frame
+        off_users_list_frame = ttk.Frame(off_users_frame, style = "Sidebar.TFrame")
+        off_users_list.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        off_users_list_frame.pack_propagate(False)
+
+        # - Offline Users list
+        off_users_list = ttk.Listbox(
+            off_users_list_frame, bg = self.sidebar_color, fg = self.text_fg,
+            selectbackground = self.accent_color, selectforeground = "white",
+            font = ('Helvitica', 9), relief = "flat", highlightthickness = 0
+        )
+        off_user_list.pack(side = "top", fill = "both", expand = True)
+
+        # == me_user Frame
+        me_user_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.1)
+        me_user_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
+        me_user_frame.pack_propagate(False)
 
         # == Client List
         #self.client_listbox = tk.Listbox(
@@ -244,16 +389,6 @@ class GUI:
         #self.client_listbox.pack(fill="both", expand=True)
         # Bind selection in the list
         #self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
-
-        # Chat Display (inside content_frame)
-        #self.chat_display = scrolledtext.ScrolledText(
-            #content_frame, wrap=tk.WORD, height=20,
-            #font=('Helvetica', 10), padx=10, pady=10, state='disabled',
-            #bg=self.text_bg, fg=self.text_fg, insertbackground=self.text_fg,
-            #selectbackground=self.selection_color, selectforeground=self.text_fg,
-            #relief=tk.FLAT
-        #)
-        #self.chat_display.pack(fill="both", expand=False, padx=5, pady=(10, 0))
 
         # Bottom Container Frame (inside content_frame)
         #bottom_frame = ttk.Frame(content_frame, style='Dark.TFrame')
@@ -290,7 +425,7 @@ class GUI:
         self.chat_context = mode
 
         # Update button styles
-        self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Sidebar.TButton')
+        self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
         self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
         self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
 
