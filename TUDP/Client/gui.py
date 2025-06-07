@@ -356,19 +356,27 @@ class GUI:
         off_users_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         off_users_label_frame.pack_propagate(False)
 
+        print("test before")
+
         # - Offline Users label
         self.off_users_label = ttk.Label(off_users_label_frame, style = "Sidebar.TLabel", text = "Guests")
         self.off_users_label.pack(side = "top", fill = "y")
 
+        print("test after")
+
         ttk.Separator(off_users_label_frame, orient = 'horizontal').pack(fill = "x")
+
+        print("test separator")
 
         # = Offline Users list Frame
         off_users_list_frame = ttk.Frame(off_users_frame, style = "Sidebar.TFrame")
-        off_users_list.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        off_users_list_frame.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         off_users_list_frame.pack_propagate(False)
 
+        print("test")
+        
         # - Offline Users list
-        off_users_list = ttk.Listbox(
+        off_users_list = tk.Listbox(
             off_users_list_frame, bg = self.sidebar_color, fg = self.text_fg,
             selectbackground = self.accent_color, selectforeground = "white",
             font = ('Helvitica', 9), relief = "flat", highlightthickness = 0
