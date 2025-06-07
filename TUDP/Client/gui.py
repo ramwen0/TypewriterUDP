@@ -2,6 +2,15 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
+def _center_window(self, window, width, height):
+    screen_w = self.root.winfo_screenwidth()
+    screen_h = self.root.winfo_screenheight()
+    x = (screen_w - width) // 2
+    y = (screen_h - height) // 2
+    window.geometry(f"{width}x{height}+{x}+{y}")
+    window.resizable(False, False)
+
+
 class AuthGUI:
     def __init__(self, root, network_handler):
         self.root = root
@@ -9,7 +18,7 @@ class AuthGUI:
         self.network_handler = network_handler
         self._setup_styles()
         self.root.configure(bg=self.bg_color)
-        self._center_window(300, 240)
+        _center_window(self, self.root, 300, 240)
         self._setup_screen()
 
     def _setup_styles(self):
@@ -26,13 +35,6 @@ class AuthGUI:
         style.configure('Auth.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
         style.map('Auth.TButton', background=[('active', '#3a77c2')])
 
-    def _center_window(self, width, height):
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-        x = (screen_w - width) // 2
-        y = (screen_h - height) // 2
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.resizable(False, False)
 
     def clear_screen(self):
         for widget in self.root.winfo_children():
@@ -249,20 +251,20 @@ class GUI:
                                  font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
         groups_list.pack(side = "top", fill = "both", expand = True)
 
-        # == Add Group Frame
-        add_group_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
-        add_group_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
-        add_group_frame.pack_propagate(False)
+        # == Group Buttons Frame
+        group_buttons_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.15)
+        group_buttons_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
+        group_buttons_frame.pack_propagate(False)
 
         # = Add Group Button
-        add_group_btn = ttk.Button(add_group_frame, style = "Active.TButton", text = "Add Group",
+        add_group_btn = ttk.Button(group_buttons_frame, style = "Active.TButton", text = "Add Group",
                                    command = lambda: self.add_group())
-        add_group_btn.pack(side = "left", fill = "x", expand = "true", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
-
-        #self.group_chats_btn = ttk.Button(sidebar_frame, text="Group Chats", 
-                                  #command=lambda: self.switch_chat_mode('groups'), 
-                                  #style='Active.TButton' if self.chat_context == 'groups' else 'Inactive.TButton')
-        #self.group_chats_btn.pack(fill="x", pady=5, padx=5)
+        add_group_btn.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        
+        # = Manage Group Button
+        manage_group_btn = ttk.Button(group_buttons_frame, style = "Active.TButton", text = "Manage Group",
+                                   command = lambda: self.manage_group())
+        manage_group_btn.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
 
 
         # === Main Content Area (middle section) ===
@@ -648,9 +650,25 @@ class GUI:
 
     # === Group Functionality ===
     def add_group(self):
+        create_group = tk.Toplevel()
+        _center_window(self, create_group, int(self.w_size[0] * 0.6), int(self.w_size[1] * 0.6))
+        create_group.title("Creating Group...")
+
+        create_group.grab_set()
+
         
 
+        test_label = ttk.Label(create_group, style = "Dark.TLabel", text = "forgot the text")
+        test_label.pack()
+
+        create_group.mainloop()
+
         print("creating group")
+
+    def manage_group(self):
+        
+        print("managing group")
+
 
     def update_group_ui(self):
         print("updating group")

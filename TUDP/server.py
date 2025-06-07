@@ -36,14 +36,36 @@ print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 def init_database():
     conn = sqlite3.connect("userdata.db")
     cursor = conn.cursor()
-    cursor.execute("""
+    
+    create_userdata = """
         CREATE TABLE IF NOT EXISTS userdata (
             id INTEGER PRIMARY KEY,
             username VARCHAR(255) NOT NULL,
             password VARCHAR(255) NOT NULL,
             UNIQUE(username)
         )
-    """)
+    """
+
+    create_group_owner = """
+        CREATE TABLE IF NOT EXISTS group_owner (
+            groupname VARCHAR(255) NOT NULL PRIMARY KEY,
+            username VARCHAR(255) NOT NULL,
+            UNIQUE(groupname)
+        )
+    """
+
+    create_group = """
+        CREATE TABLE IF NOT EXISTS group (
+            groupname VARCHAR(255) NOT NULL,
+            username VARCHAR(255) NOT NULL,
+            FOREIGN KEY(groupname) REFERNCES group_owner(groupname)
+        )
+    """
+    
+    cursor.execute(create_userdata)
+    cursor.execute(create_group_owner)
+    cursor.execute(create_group)
+
     conn.commit()
     conn.close()
     print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Database initialized{Colors.END}")
