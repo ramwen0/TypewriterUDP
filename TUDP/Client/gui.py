@@ -142,8 +142,8 @@ class GUI:
         style.theme_use('clam')
 
         # Configure styles
-        style.configure('Dark.TFrame', background=self.bg_color, borderwidth = 10, relief = tk.GROOVE)
-        style.configure('Sidebar.TFrame', background=self.sidebar_color, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Dark.TFrame', background=self.bg_color)#, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Sidebar.TFrame', background=self.sidebar_color)#, borderwidth = 10, relief = tk.GROOVE)
         style.configure('Dark.TEntry', borderwidth = 0,
                         fieldbackground=self.sidebar_color,
                         foreground=self.text_fg,
@@ -223,7 +223,7 @@ class GUI:
 
         # == Groups Frame
         groups_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame")
-        groups_frame.pack(side = "top", fill = "both", expand = True, pady = (self.w_size[1] * 0.01, 0))
+        groups_frame.pack(side = "top", fill = "both", expand = True, pady = self.w_size[1] * 0.01)
         groups_frame.pack_propagate(False)
 
         # = Groups label Frame
@@ -248,6 +248,16 @@ class GUI:
                                  selectbackground = self.accent_color, selectforeground = "white",
                                  font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
         groups_list.pack(side = "top", fill = "both", expand = True)
+
+        # == Add Group Frame
+        add_group_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
+        add_group_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
+        add_group_frame.pack_propagate(False)
+
+        # = Add Group Button
+        add_group_btn = ttk.Button(add_group_frame, style = "Active.TButton", text = "Add Group",
+                                   command = lambda: self.add_group())
+        add_group_btn.pack(side = "left", fill = "x", expand = "true", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
 
         #self.group_chats_btn = ttk.Button(sidebar_frame, text="Group Chats", 
                                   #command=lambda: self.switch_chat_mode('groups'), 
@@ -284,7 +294,7 @@ class GUI:
         self.chat_display.pack(fill="both", expand = True)
 
         # == All Inputs frame
-        all_inputs_frame = ttk.Frame(content_frame, style = 'Sidebar.TFrame', height = self.w_size[1] * 0.1)
+        all_inputs_frame = ttk.Frame(content_frame, style = 'Sidebar.TFrame', height = self.w_size[1] * 0.08)
         all_inputs_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = (self.w_size[1] * 0.01, 0))
         all_inputs_frame.pack_propagate(False)
 
@@ -356,25 +366,17 @@ class GUI:
         off_users_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         off_users_label_frame.pack_propagate(False)
 
-        print("test before")
-
         # - Offline Users label
         self.off_users_label = ttk.Label(off_users_label_frame, style = "Sidebar.TLabel", text = "Guests")
         self.off_users_label.pack(side = "top", fill = "y")
 
-        print("test after")
-
         ttk.Separator(off_users_label_frame, orient = 'horizontal').pack(fill = "x")
-
-        print("test separator")
 
         # = Offline Users list Frame
         off_users_list_frame = ttk.Frame(off_users_frame, style = "Sidebar.TFrame")
         off_users_list_frame.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         off_users_list_frame.pack_propagate(False)
 
-        print("test")
-        
         # - Offline Users list
         off_users_list = tk.Listbox(
             off_users_list_frame, bg = self.sidebar_color, fg = self.text_fg,
@@ -383,10 +385,14 @@ class GUI:
         )
         off_users_list.pack(side = "top", fill = "both", expand = True)
 
-        # == me_user Frame
-        me_user_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.1)
-        me_user_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
-        me_user_frame.pack_propagate(False)
+        # == My User label Frame
+        my_user_label_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
+        my_user_label_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
+        my_user_label_frame.pack_propagate(False)
+
+        # = My User label
+        my_user_label = ttk.Label(my_user_label_frame, style = "Sidebar.TLabel", text = "PlaceHolder")
+        my_user_label.pack(side = "top", fill = "y", expand = True)
 
         # == Client List
         #self.client_listbox = tk.Listbox(
@@ -397,10 +403,6 @@ class GUI:
         #self.client_listbox.pack(fill="both", expand=True)
         # Bind selection in the list
         #self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
-
-        # Bottom Container Frame (inside content_frame)
-        #bottom_frame = ttk.Frame(content_frame, style='Dark.TFrame')
-        #bottom_frame.pack(side="bottom", fill="x", expand=False, pady=10, padx=2)
 
         # Input Area
         #input_frame = ttk.Frame(bottom_frame, style='Dark.TFrame', width=300)
@@ -418,15 +420,15 @@ class GUI:
         #self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
         #self.file_btn.pack_propagate(False)
 
-        # Configure tags
-        #self.chat_display.tag_config('username', foreground=self.accent_color, font=('Helvetica', 10, 'bold'))
-        #self.chat_display.tag_config('time', foreground='#888888', font=('Helvetica', 8))
-        #self.chat_display.tag_config('message', foreground=self.text_fg, font=('Helvetica', 10))
-        #self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
-        #self.chat_display.tag_config('typing', foreground='#f5df3d', font=('Helvetica', 9, 'italic'))
+        # === Tags Configuration ===
+        self.chat_display.tag_config('username', foreground=self.accent_color, font=('Helvetica', 10, 'bold'))
+        self.chat_display.tag_config('time', foreground='#888888', font=('Helvetica', 8))
+        self.chat_display.tag_config('message', foreground=self.text_fg, font=('Helvetica', 10))
+        self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
+        self.chat_display.tag_config('typing', foreground='#f5df3d', font=('Helvetica', 9, 'italic'))
 
-        #if initial_port:
-            #self.client_listbox.insert(tk.END, f" Client {initial_port}")
+        if initial_port:
+            self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
     # ==== Sidebar button functionality ==== #
     def switch_chat_mode(self, mode):
@@ -552,6 +554,7 @@ class GUI:
         if selection:
             index = selection[0]
             display_text = self.client_listbox.get(index)
+            print(display_text)
             # Extract port from list entry
             port = display_text.split("(")[-1].rstrip(")")
             self.selected_port = port
@@ -643,6 +646,11 @@ class GUI:
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         self.chat_display.config(state='disabled')
 
-    # === switch to group mode ===
+    # === Group Functionality ===
+    def add_group(self):
+        
+
+        print("creating group")
+
     def update_group_ui(self):
         print("updating group")
