@@ -142,8 +142,8 @@ class GUI:
         style.theme_use('clam')
 
         # Configure styles
-        style.configure('Dark.TFrame', background=self.bg_color)#, borderwidth = 10, relief = tk.GROOVE)
-        style.configure('Sidebar.TFrame', background=self.sidebar_color)#, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Dark.TFrame', background=self.bg_color, borderwidth = 10, relief = tk.GROOVE)
+        style.configure('Sidebar.TFrame', background=self.sidebar_color, borderwidth = 10, relief = tk.GROOVE)
         style.configure('Dark.TEntry', borderwidth = 0,
                         fieldbackground=self.sidebar_color,
                         foreground=self.text_fg,
@@ -266,8 +266,8 @@ class GUI:
         active_chat_frame.pack_propagate(False)
 
         # = Active chat label
-        active_chat_label = ttk.Label(active_chat_frame, text = "Active Chat Name", style = "Sidebar.TLabel")
-        active_chat_label.pack(side = "top", fill = "y", expand = True, anchor = "center")
+        self.active_chat_label = ttk.Label(active_chat_frame, text = "All Chat", style = "Sidebar.TLabel")
+        self.active_chat_label.pack(side = "top", fill = "y", expand = True, anchor = "center")
 
         # == Chat display frame
         chat_display_frame = ttk.Frame(content_frame, style = 'Dark.TFrame')
@@ -357,8 +357,8 @@ class GUI:
         off_users_label_frame.pack_propagate(False)
 
         # - Offline Users label
-        off_users_label = ttk.Label(off_users_label_frame, style = "Sidebar.TLabel", text = "Clients / Offline Users")
-        off_users_label.pack(side = "top", fill = "y")
+        self.off_users_label = ttk.Label(off_users_label_frame, style = "Sidebar.TLabel", text = "Guests")
+        self.off_users_label.pack(side = "top", fill = "y")
 
         ttk.Separator(off_users_label_frame, orient = 'horizontal').pack(fill = "x")
 
@@ -373,7 +373,7 @@ class GUI:
             selectbackground = self.accent_color, selectforeground = "white",
             font = ('Helvitica', 9), relief = "flat", highlightthickness = 0
         )
-        off_user_list.pack(side = "top", fill = "both", expand = True)
+        off_users_list.pack(side = "top", fill = "both", expand = True)
 
         # == me_user Frame
         me_user_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.1)
@@ -427,7 +427,13 @@ class GUI:
         # Update button styles
         self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
         self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
-        self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
+        #self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
+
+        # Update Active Chat label
+        self.active_chat_label.configure(text = "All Chat" if mode == 'all' else "DMs")
+
+        # Update offline users label
+        self.off_users_label.configure(text = "Guests" if mode == 'all' else "Offline Users")
 
         # Call the appropriate update method
         if mode == 'all':
