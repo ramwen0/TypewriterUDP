@@ -166,6 +166,7 @@ class NetworkHandler:
                         # Display the message
                         if hasattr(self.gui, "display_message") and sender and content:
                             self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
+
                             if not self.gui.chat_context == 'all':
                                 self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
                             else:

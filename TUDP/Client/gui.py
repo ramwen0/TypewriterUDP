@@ -304,57 +304,45 @@ class GUI:
 
     # ==== typing functions ==== #
     def show_typing_text(self, sender, text, context="all"):
-        # Only show if we're in the matching context
         if (context == 'all' and self.chat_context != 'all') or \
                 (context == 'dm' and self.chat_context != 'dm'):
             return
 
+        # A unique, predictable tag for each user's indicator
+        tag_name = f"typing_indicator_{sender}_{context}"
+
         self.chat_display.config(state='normal')
-        indicators = self.typing_indicators[context]
 
-        # Clear previous indicator if exists
-        if sender in indicators:
-            self.chat_display.delete(indicators[sender], f"{indicators[sender]} lineend")
+        # 1. Find the range of the old indicator text using its tag.
+        tag_range = self.chat_display.tag_ranges(tag_name)
+        if tag_range:
+            # If the tag exists, delete the text between its start and end indices.
+            self.chat_display.delete(tag_range[0], tag_range[1])
 
-        # Add new indicator at the end
-        pos = self.chat_display.index('end-1c')
-        self.chat_display.insert(pos, f"\n{sender} is typing: {text}", 'typing')
-        indicators[sender] = pos  # Store the position
-        self.chat_display.see('end')
+        # 2. If the user is still typing (the received text is not empty), add the new indicator.
+        if text:
+            indicator_text = f"{sender} is typing: {text}\n"
+
+            self.chat_display.insert(tk.END, indicator_text, ('typing', tag_name))
+
+        self.chat_display.see(tk.END)
         self.chat_display.config(state='disabled')
 
     def on_typing(self, event=None):
         text = self.message_entry.get()
-        if text and self.network_handler:
+        if self.network_handler:
             context = 'dm' if self.chat_context == 'dm' else 'all'
             self.network_handler.send_typing(text, context)
 
-        # Clear existing typing indicator
-        self.clear_typing_text("You", context=self.chat_context)
-
     def clear_typing_text(self, sender, context="all"):
-        if context not in self.typing_indicators:
-            return
+        tag_name = f"typing_indicator_{sender}_{context}"
 
-        if sender in self.typing_indicators[context]:
-            idx = self.typing_indicators[context].pop(sender)
-            self.chat_display.config(state='normal')
-            self.chat_display.delete(idx, f"{idx} lineend")
-            self.chat_display.config(state='disabled')
-
-    def _display_typing(self, sender, text, context):
         self.chat_display.config(state='normal')
-        indicators = self.typing_indicators[context]
 
-        if sender not in indicators:
-            idx = self.chat_display.index('end-1c')
-            self.chat_display.insert(idx, "\n", 'typing')
-            indicators[sender] = idx
+        tag_range = self.chat_display.tag_ranges(tag_name)
+        if tag_range:
+            self.chat_display.delete(tag_range[0], tag_range[1])
 
-        idx = indicators[sender]
-        self.chat_display.delete(idx, f"{idx} lineend")
-        self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
-        self.chat_display.see('end')
         self.chat_display.config(state='disabled')
 
     # ==== list updates ==== #
@@ -363,6 +351,9 @@ class GUI:
             return
         self.client_listbox.delete(0, tk.END)
         for port, username in username_map.items():
+            if ":" in username:
+                username = username.split(":")[0]
+
             if username.startswith("Guest_"):
                 display_text = f"{username}"
             else:
@@ -375,6 +366,9 @@ class GUI:
         self.client_listbox.delete(0, tk.END) # clear list
         self_port = str(self.network_handler.get_port())
         for port, username in self.network_handler.username_map.items():
+            if ":" in username:
+                username = username.split(":")[0]
+
             if not username.startswith("Guest_") and port != self_port: # not client's own port and not unauthenticated client
                 self.client_listbox.insert(tk.END, f"{username} ({port})") # add USER to list
             # clear chat
@@ -408,6 +402,8 @@ class GUI:
     def display_dm_message(self, port, sender, message, timestamp):
         # Get the username associated with this port
         username = self.network_handler.username_map.get(port, f"User {port}")
+
+        self.clear_typing_text(username, context="dm")
 
         if port not in self.dm_histories:
             self.dm_histories[port] = []
@@ -613,7 +609,14 @@ class GUI:
 
     # ==== Chatting ==== #
     def display_message(self, sender, message, timestamp):
+        self.clear_typing_text(sender, context="all")
+
         self.chat_display.config(state='normal')
+
+        if self.chat_display.index("end-1c") != "1.0":
+            if self.chat_display.get("end-2c", "end-1c") != '\n':
+                self.chat_display.insert(tk.END, "\n")
+
         is_port = sender.isdigit()
         if sender == "Server":
             self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
@@ -639,8 +642,12 @@ class GUI:
         ):
             return
 
-        self.clear_typing_text("You", context=self.chat_context)
         self.message_entry.delete(0, tk.END)
+
+        # Tell other clients you have stopped typing by sending an empty typing event.
+        context = 'dm' if self.chat_context == 'dm' else 'all'
+        self.network_handler.send_typing("", context)
+
         timestamp = datetime.now().strftime("%H:%M")
 
         if self.chat_context == "dm" and self.selected_port:  # if DM, send accordingly
@@ -652,8 +659,6 @@ class GUI:
             if self.chat_context == 'all':
                 self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
-
-        self.clear_typing_text("You", context=self.chat_context)
 
     # ==== refresh chats ==== #
     def update_all_chat(self):

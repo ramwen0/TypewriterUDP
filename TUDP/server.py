@@ -90,7 +90,7 @@ def periodic_client_updates():
         time.sleep(5)  # Update interval (5 seconds)
         with clients_lock:
             if clients:  # Only send if there are clients
-                client_info = [f"{p}:{client_users.get(p, '')}:{clients[p][0]}" for p in clients]
+                client_info = [f"{p}:{client_users.get(p, f'Guest_{p}')}:{clients[p][0]}" for p in clients]
                 client_list = ",".join(client_info)
                 broadcast(f"[Server] CLIENTS:{client_list}")
 # Start periodic updates thread
