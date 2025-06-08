@@ -349,14 +349,14 @@ class GUI:
         on_users_list_frame.pack_propagate(False)
 
         # - Online Users list
-        self.client_listbox = tk.Listbox(
+        self.on_users_list = tk.Listbox(
             on_users_list_frame, bg=self.sidebar_color, fg=self.text_fg,
             selectbackground=self.accent_color, selectforeground="white",
             font=('Helvetica', 9), relief="flat", highlightthickness=0
         )
-        self.client_listbox.pack(side = "top", fill="both", expand=True)
+        self.on_users_list.pack(side = "top", fill="both", expand=True)
         # Bind selection in the list
-        self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
+        self.on_users_list.bind("<<ListboxSelect>>", self.on_client_select)
 
         # == Offline Users / Guests Frame
         off_users_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame")
@@ -380,12 +380,12 @@ class GUI:
         off_users_list_frame.pack_propagate(False)
 
         # - Offline Users list
-        off_users_list = tk.Listbox(
+        self.off_users_list = tk.Listbox(
             off_users_list_frame, bg = self.sidebar_color, fg = self.text_fg,
             selectbackground = self.accent_color, selectforeground = "white",
             font = ('Helvitica', 9), relief = "flat", highlightthickness = 0
         )
-        off_users_list.pack(side = "top", fill = "both", expand = True)
+        self.off_users_list.pack(side = "top", fill = "both", expand = True)
 
         # == My User label Frame
         my_user_label_frame = ttk.Frame(client_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
@@ -393,34 +393,9 @@ class GUI:
         my_user_label_frame.pack_propagate(False)
 
         # = My User label
-        my_user_label = ttk.Label(my_user_label_frame, style = "Sidebar.TLabel", text = "PlaceHolder")
-        my_user_label.pack(side = "top", fill = "y", expand = True)
+        self.my_user_label = ttk.Label(my_user_label_frame, style = "Sidebar.TLabel", text = "Your Username")
+        self.my_user_label.pack(side = "top", fill = "y", expand = True)
 
-        # == Client List
-        #self.client_listbox = tk.Listbox(
-            #client_frame, bg=self.entry_bg, fg=self.text_fg,
-            #selectbackground=self.accent_color, selectforeground="white",
-            #font=('Helvetica', 9), relief="flat", highlightthickness=0
-        #)
-        #self.client_listbox.pack(fill="both", expand=True)
-        # Bind selection in the list
-        #self.client_listbox.bind("<<ListboxSelect>>", self.on_client_select)
-
-        # Input Area
-        #input_frame = ttk.Frame(bottom_frame, style='Dark.TFrame', width=300)
-        #input_frame.pack(side="left", fill="both", expand=False)
-        #input_frame.pack_propagate(False)
-        #self.typing_label = ttk.Label(input_frame, text="", style='Dark.TFrame', foreground="#888888")
-        #self.typing_label.pack(side="left")
-        #self.message_entry = ttk.Entry(input_frame, font=('Helvetica', 10), style='Dark.TEntry')
-        #self.message_entry.pack(fill="x", expand=True)
-        #self.message_entry.bind('<KeyRelease>', self.on_typing)
-        #self.message_entry.bind('<Return>', self.send_message)
-
-        # File send Button
-        #self.file_btn = ttk.Button(bottom_frame, text="File", style='Dark.TButton', width=100)
-        #self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
-        #self.file_btn.pack_propagate(False)
 
         # === Tags Configuration ===
         self.chat_display.tag_config('username', foreground=self.accent_color, font=('Helvetica', 10, 'bold'))
@@ -429,8 +404,8 @@ class GUI:
         self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
         self.chat_display.tag_config('typing', foreground='#f5df3d', font=('Helvetica', 9, 'italic'))
 
-        if initial_port:
-            self.client_listbox.insert(tk.END, f" Client {initial_port}")
+        #if initial_port:
+            #self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
     # ==== Sidebar button functionality ==== #
     def switch_chat_mode(self, mode):
@@ -452,7 +427,7 @@ class GUI:
             self.update_all_chat()
             print("in all chat mode")
         elif mode == 'dm':
-            self.update_user_list()
+            #self.update_user_list()
             print("in dm mode")
         elif mode == 'groups':
             self.update_group_ui()
@@ -524,29 +499,40 @@ class GUI:
         self.chat_display.config(state='disabled')
 
     # ==== list updates ==== #
-    def update_client_list(self, username_map): # All Chat *client* list
-        if not hasattr(self, 'client_listbox'): # guard against initialization before setup_ui is run
+    def update_client_list(self, on_users, off_users, guests):
+        if not hasattr(self, 'on_users_list') or not hasattr(self, 'off_users_list'): # guard against initialization before setup_ui is run
+            print("Tried to update client list, but doesnt have ui initialized")
             return
-        self.client_listbox.delete(0, tk.END)
-        for port, username in username_map.items():
-            if username.startswith("Guest_"):
-                display_text = f"{username}"
-            else:
-                display_text = f"{username} ({port})"
-            self.client_listbox.insert(tk.END, display_text)
 
-    def update_user_list(self): # DM/Group *user* list
-        if not hasattr(self, 'client_listbox'): # guard against initialization before setup_ui is run
-            return
-        self.client_listbox.delete(0, tk.END) # clear list
-        self_port = str(self.network_handler.get_port())
-        for port, username in self.network_handler.username_map.items():
-            if not username.startswith("Guest_") and port != self_port: # not client's own port and not unauthenticated client
-                self.client_listbox.insert(tk.END, f"{username} ({port})") # add USER to list
-            # clear chat
-            self.chat_display.config(state='normal')
-            self.chat_display.delete("1.0", tk.END)
-            self.chat_display.config(state='disabled')
+        self.on_users_list.delete(0, tk.END)
+        self.off_users_list.delete(0, tk.END)
+
+        # Update on_users_list
+        for port, username in on_users.items():
+            display_text = f"{username} ({port})"
+            self.on_users_list.insert(tk.END, display_text)
+
+        # Update guests
+        if self.chat_context == "all":
+            for port, username in guests.items():
+                display_text = f"{username}"
+                self.off_users_list.insert(tk.END, display_text)
+        else:
+            for username in off_users:
+                display_text = f"{username}"
+                self.off_users_list.insert(tk.END, display_text)
+
+        
+
+
+        #self.client_listbox.delete(0, tk.END)
+        #for port, username in username_map.items():
+            #if username.startswith("Guest_"):
+                #display_text = f"{username}"
+            #else:
+                #display_text = f"{username} ({port})"
+            #self.client_listbox.insert(tk.END, display_text)
+
 
     # ==== DM chat functionality ==== #
     def on_client_select(self, event): # function to select a user from the list and get into their DM's
@@ -568,6 +554,7 @@ class GUI:
         self.dm_histories[port].append((sender, message, timestamp))
         # update display if it's the active chat
         if self.chat_context == "dm" and self.selected_port == port:
+            print(self.selected_port)
             self.display_dm_history(port)
 
     def dm_notify(self, from_port, to_port):
@@ -670,5 +657,8 @@ class GUI:
         print("managing group")
 
 
-    def update_group_ui(self):
-        print("updating group")
+    # === Update my username label ===
+    def update_my_username(self, username):
+        if not hasattr(self, 'my_user_label'):
+            return
+        self.my_user_label.configure(text = username)

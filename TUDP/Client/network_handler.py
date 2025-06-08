@@ -12,6 +12,7 @@ class NetworkHandler:
         self.receive_thread = None
         self.gui = None
         self.username_map = {}
+        self.registered_users = {}
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -31,6 +32,7 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
+                print(message)
                 # ==== DM Notify ==== #
                 if message.startswith("DM_NOTIFY:"):
                     _, from_port, to_port = message.split(":", 2)
@@ -64,8 +66,9 @@ class NetworkHandler:
                             try:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
-                                if hasattr(self.gui, "update_client_list"):
-                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
+                                print(f"On Server Username: {self.username_map}")
+
+                                self.gen_all_lists(self.username_map)
                             except ValueError:
                                 continue
                         elif "CLIENTS:" in message:
@@ -76,13 +79,25 @@ class NetworkHandler:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
                                         new_map[port] = username if username else f"Guest_{port}"
+                                        if hasattr(self.gui, "update_my_username"):
+                                            self.gui.root.after(0, self.gui.update_my_username, username)
                                     else:
                                         new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
+                                        print("new map: " + new_map)
                                 self.username_map = new_map  # Replace completely rather than update
-                                if hasattr(self.gui, "update_client_list"):
-                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
+                                self.gen_all_lists(self.username_map)
                             except ValueError:
                                 continue
+                        elif "REGISTERED_USERS:" in message:
+                            try:
+                                self.registered_users = message.split("REGISTERED_USERS:")[1].split(",")
+
+                                print(self.registered_users)
+                                
+
+                            except ValueError:
+                                continue
+                                
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
                 # ==== Typing messages ==== #
@@ -159,3 +174,37 @@ class NetworkHandler:
             self.client_socket.sendto(f"disconnect @{port}".encode(), self.server_address)
             self.running = False
             self.client_socket.close()
+
+    # === Generates all the lists from the default client_list
+    def gen_all_lists(self, client_list):
+        self.on_users_list = {}
+        self.off_users_list = self.registered_users
+        self.guests_list = {}
+
+        print(f"Client list: {client_list}")
+
+        for port, username in client_list.items():
+            print(f"user port: {port}, username: {username}")
+
+            # Handles if finds a guest
+            if username.startswith("Guest_"):
+                self.guests_list[port] = username
+                print("Found a Guest")
+                print(f"Guests list: {self.guests_list}")
+                
+            # Handles if finds a user
+            else:
+                self.on_users_list[port] = username
+                print("Found a User")
+                print(f"On Users List: {self.on_users_list}")
+
+            # Generate offline users list
+            for port, username in self.on_users_list.items():
+                if username in self.off_users_list:
+                    self.off_users_list.remove(username)
+                   
+                print(f"Off Users List: {self.off_users_list}")
+
+        if hasattr(self.gui, "update_client_list"):
+            self.gui.root.after(0, self.gui.update_client_list, self.on_users_list, self.off_users_list, self.guests_list)
+        
