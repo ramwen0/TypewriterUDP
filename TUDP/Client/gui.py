@@ -273,6 +273,7 @@ class GUI:
                                  selectbackground = self.accent_color, selectforeground = "white",
                                  font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
         self.groups_list.pack(side = "top", fill = "both", expand = True)
+        self.groups_list.bind("<<ListboxSelect>>", self.on_group_select)
 
         # == Group Buttons Frame
         group_buttons_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.15)
@@ -439,7 +440,6 @@ class GUI:
         # Update button styles
         self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
         self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
-        #self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
 
         # Update Active Chat label
         self.active_chat_label.configure(text = "All Chat" if mode == 'all' else "DMs")
@@ -455,7 +455,7 @@ class GUI:
             #self.update_user_list()
             print("in dm mode")
         elif mode == 'groups':
-            self.update_group_ui()
+            #self.update_group_ui()
             print("in group mode")
 
     def all_chat(self):
@@ -537,17 +537,6 @@ class GUI:
                 self.off_users_list.insert(tk.END, display_text)
 
 
-
-
-        #self.client_listbox.delete(0, tk.END)
-        #for port, username in username_map.items():
-            #if username.startswith("Guest_"):
-                #display_text = f"{username}"
-            #else:
-                #display_text = f"{username} ({port})"
-            #self.client_listbox.insert(tk.END, display_text)
-
-
     # ==== DM chat functionality ==== #
     def on_client_select(self, event):
         if self.chat_context != "dm":
@@ -570,6 +559,21 @@ class GUI:
 
             # Request fresh history
             self.request_dm_history(username)
+
+
+    def on_group_select(self, event):
+        print("Entered ON GROUP SELECT")
+        if self.chat_context != "groups":
+            self.switch_chat_mode("groups")
+
+        selection = self.groups_list.curselection()
+
+        if selection:
+            idx = selection[0]
+            active_group = self.groups_list.get(idx)
+
+            print(active_group)
+
 
     def display_dm_message(self, port, sender, message, timestamp):
         # Get the username associated with this port
@@ -1110,7 +1114,6 @@ class GUI:
 
                 self.network_handler.send_group("create", group_name, group_owner_name, group_members)
 
-
                 print(f"Group name: {group_name}, Group owner port: {group_owner_port}, Group owner name: {group_owner_name}")
 
 
@@ -1118,6 +1121,7 @@ class GUI:
         if status == True:
             self.add_group_window.destroy()
             tk.messagebox.showinfo("Created Group", msg)
+            self.gen_user_groups()
 
         else:
             print(f"Status: {status}")

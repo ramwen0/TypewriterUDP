@@ -6,7 +6,7 @@ from file_transfer_handler import FileTransferHandler
 
 class NetworkHandler:
     def __init__(self):
-        self.server_address = ("85.243.194.132", 12345)
+        self.server_address = ("127.0.0.1", 12345)
         self.buffer_size = 1024
         self.client_socket = None
         self.running = True
