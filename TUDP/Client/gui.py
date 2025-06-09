@@ -129,9 +129,11 @@ class GUI:
         # ==== DM UI ==== #
         self.chat_context = "all"  # changed to ("dm", recipient_port) or ("group", recipient_port)
         self.dm_histories = {}  # {recipient_port} : [ (sender, msg, time), ... ]
+        self.group_chat_histories = {}
         self.selected_port = None
         self.dm_refresh_interval = 5000
         self.dm_refresh_thread = None
+        self.selected_group_name = None
         # ==== All Chat UI ==== #
         self.all_chat_history = []
 
@@ -434,38 +436,40 @@ class GUI:
             #self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
     # ==== Sidebar button functionality ==== #
-    def switch_chat_mode(self, mode, selected_user_port=None, selected_user_name=None):
+    def switch_chat_mode(self, mode, selected_user_port=None, selected_user_name=None, selected_group_name=None):
         self.chat_context = mode
-        self.selected_port = selected_user_port
-        self.selected_username = selected_user_name
 
-        # Update button styles
-        self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
-        self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
-        # self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
-
-        # Clear chat display
         self.chat_display.config(state='normal')
         self.chat_display.delete("1.0", tk.END)
         self.chat_display.config(state='disabled')
 
+        # Update button styles
+        self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
+        self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
+        # When in group mode, deselect the other main buttons
+        if mode == 'group':
+            self.all_chat_btn.configure(style='Inactive.TButton')
+            self.dms_btn.configure(style='Inactive.TButton')
+
         if mode == 'all':
+            self.selected_port, self.selected_username, self.selected_group_name = None, None, None
             self.active_chat_label.config(text="All Chat")
-            self.update_all_chat()  # Display history for all chat
-            self.selected_port = None
-            self.selected_username = None
+            self.update_all_chat()
         elif mode == 'dm':
-            if self.selected_port and self.selected_username:
+            self.selected_port, self.selected_username, self.selected_group_name = selected_user_port, selected_user_name, None
+            if self.selected_username:
                 self.active_chat_label.config(text=f"DM with {self.selected_username}")
-                self.request_dm_history(self.selected_username)  # Load and display DM history
+                self.request_dm_history(self.selected_username)
             else:
                 self.active_chat_label.config(text="DMs - Select a user")
-            self.dms_btn.configure(text="DMs")  # Clear notification dot
-        elif mode == 'groups':
-            self.active_chat_label.config(text="Group Chats")
-            # Placeholder for group chat display logic
-            self.selected_port = None
-            self.selected_username = None
+            self.dms_btn.configure(text="DMs")
+        elif mode == 'group':
+            self.selected_port, self.selected_username, self.selected_group_name = None, None, selected_group_name
+            self.active_chat_label.config(text=f"Group: {self.selected_group_name}")
+            if self.network_handler and self.selected_group_name:
+                # Request history from server, which will trigger a display update upon receipt
+                self.network_handler.request_group_history(self.selected_group_name)
+            self.display_group_chat()  # Immediately display any cached messages
 
         self.update_client_list()
 
@@ -624,19 +628,19 @@ class GUI:
             else:
                 print(f"Could not determine user/port for DM: {display_text}")
 
-
     def on_group_select(self, event):
-        print("Entered ON GROUP SELECT")
-        if self.chat_context != "groups":
-            self.switch_chat_mode("groups")
-
         selection = self.groups_list.curselection()
+        if not selection:
+            return
 
-        if selection:
-            idx = selection[0]
-            active_group = self.groups_list.get(idx)
+        index = selection[0]
+        group_name = self.groups_list.get(index)
 
-            print(active_group)
+        if group_name and group_name != self.selected_group_name:
+            # Clear existing history for a clean load
+            if group_name in self.group_chat_histories:
+                self.group_chat_histories[group_name] = []
+            self.switch_chat_mode('group', selected_group_name=group_name)
 
 
     def display_dm_message(self, port, sender, message, timestamp):
@@ -878,27 +882,24 @@ class GUI:
         if not message or not self.network_handler:
             return
 
-        if isinstance(message, str) and message.upper().startswith(
-                ("REQUEST_DM_HISTORY:", "REQUEST_MY_DM_HISTORY:", "DM:")
-        ):
-            return
-
         self.message_entry.delete(0, tk.END)
 
-        # Tell other clients you have stopped typing by sending an empty typing event.
-        context = 'dm' if self.chat_context == 'dm' else 'all'
-        self.network_handler.send_typing("", context)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
-        timestamp = datetime.now().strftime("%H:%M")
-
-        if self.chat_context == "dm" and self.selected_port:  # if DM, send accordingly
-            # add message to local history immediately
-            self.display_dm_message(self.selected_port, "You", message, timestamp)
-            # send the message
+        if self.chat_context == "dm" and self.selected_port:
+            self.network_handler.send_typing("", 'dm')
+            self.display_dm_message(self.selected_port, self.user_name, message, timestamp)
             self.network_handler.send_message(message, dm_recipient_port=self.selected_port)
-        else:  # if not, treat as all chat message
-            if self.chat_context == 'all':
-                self.display_message("You", message, timestamp)
+
+        elif self.chat_context == 'group' and self.selected_group_name:
+            self.network_handler.send_typing("", 'group')
+            # Display message locally immediately
+            self.display_group_message(self.selected_group_name, "You", message, timestamp)
+            # Send to server for distribution
+            self.network_handler.send_group_message(self.selected_group_name, message)
+        else:  # All Chat
+            self.network_handler.send_typing("", 'all')
+            self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
 
     # ==== refresh chats ==== #
@@ -1201,3 +1202,54 @@ class GUI:
     def manage_group(self):
 
         print("managing group")
+
+    def display_group_chat(self):
+        """Renders the chat history for the currently selected group from the local cache."""
+        if not self.selected_group_name:
+            return
+
+        self.chat_display.config(state='normal')
+        self.chat_display.delete("1.0", tk.END)
+
+        history = self.group_chat_histories.get(self.selected_group_name, [])
+        history.sort(key=lambda x: x[2])  # Sort by timestamp
+
+        for sender, message, ts in history:
+            self.chat_display.insert(tk.END, f"{sender}\n", 'username')
+            self.chat_display.insert(tk.END, f"{message}\n", 'message')
+            try:  # Format timestamp for better readability
+                dt_obj = datetime.fromisoformat(ts.split('.')[0])
+                formatted_time = dt_obj.strftime("%H:%M")
+                self.chat_display.insert(tk.END, f"({formatted_time})\n\n", 'time')
+            except (ValueError, IndexError):
+                self.chat_display.insert(tk.END, f"({ts})\n\n", 'time')
+
+        self.chat_display.config(state='disabled')
+        self.chat_display.see('end')
+
+    def process_group_history(self, group_name, sender, message, timestamp):
+        """Adds a historical message from the server to the local cache."""
+        if group_name not in self.group_chat_histories:
+            self.group_chat_histories[group_name] = []
+
+        # Avoid duplicates from multiple requests
+        if not any(m[1] == message and m[2] == timestamp for m in self.group_chat_histories[group_name]):
+            display_sender = "You" if sender == self.user_name else sender
+            self.group_chat_histories[group_name].append((display_sender, message, timestamp))
+
+        if self.chat_context == 'group' and self.selected_group_name == group_name:
+            self.display_group_chat()
+
+    def display_group_message(self, group_name, sender, message, timestamp):
+        """Handles a new live group message and updates the display if active."""
+        if group_name not in self.group_chat_histories:
+            self.group_chat_histories[group_name] = []
+
+        display_sender = "You" if sender == self.user_name else sender
+        self.group_chat_histories[group_name].append((display_sender, message, timestamp))
+
+        if self.chat_context == 'group' and self.selected_group_name == group_name:
+            self.display_group_chat()
+        else:
+            # Optional: Add a notification dot to the group list item
+            pass

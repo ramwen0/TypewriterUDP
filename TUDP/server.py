@@ -98,6 +98,19 @@ def init_database():
                        FOREIGN KEY(username) REFERENCES userdata (username)
                     )
                    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS group_chat_histories (
+            id INTEGER PRIMARY KEY,
+            groupname VARCHAR(255) NOT NULL,
+            sender_username VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (groupname) REFERENCES user_group_owner(groupname) ON DELETE CASCADE,
+            FOREIGN KEY (sender_username) REFERENCES userdata(username)
+        )
+    """)
+    
     conn.commit()
     conn.close()
     print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Databases initialized{Colors.END}")
@@ -344,28 +357,27 @@ def gen_all_users():
 
 
 def gen_groups_lists():
-    groups_info = f"[Server] GROUPS_LISTS"
+    groups_info = "[Server] GROUPS_LISTS"
 
     conn = sqlite3.connect("userdata.db")
     cursor = conn.cursor()
 
     get_group_info = """
-        SELECT o.groupname,
-               o.username owner,
-               GROUP_CONCAT(m.username) members
-        FROM user_group_owner o
-        LEFT JOIN user_group m ON o.groupname = m.groupname
-        GROUP BY o.groupname
-    """
+                     SELECT o.groupname,
+                            o.username               as owner,
+                            GROUP_CONCAT(m.username) as members
+                     FROM user_group_owner o
+                              LEFT JOIN user_group m ON o.groupname = m.groupname
+                     GROUP BY o.groupname \
+                     """
 
     cursor.execute(get_group_info)
 
     for group_name, group_owner, group_members in cursor.fetchall():
-        groups_info += f":{group_name},{group_owner},{group_members}"
-        #print(f"Group: {group_name}, Owner: {group_owner}, All Members: {group_members}")
+        # Handle cases where a group might have no members other than the owner yet
+        groups_info += f":{group_name},{group_owner},{group_members or ''}"
 
-    print(groups_info)
-
+    conn.close()
     broadcast(groups_info)
 
 
@@ -534,6 +546,59 @@ while True:
         # Handles Groups
         if message_str.startswith("GROUPS:"):
             handle_groups(message_str, client_ip, client_port)
+            continue
+
+        if message_str.startswith("GROUP_MSG:"):
+            try:
+                _, group_name, content = message_str.split(":", 2)
+                with clients_lock:
+                    sender_name = client_users.get(client_port, f"Guest_{client_port}")
+
+                # 1. Save to DB (only if sender is not a guest)
+                if not sender_name.startswith("Guest_"):
+                    conn = sqlite3.connect("userdata.db")
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO group_chat_histories (groupname, sender_username, message) VALUES (?, ?, ?)",
+                        (group_name, sender_name, content)
+                    )
+                    conn.commit()
+
+                    # 2. Get all members of the group
+                    cursor.execute("SELECT username FROM user_group WHERE groupname=?", (group_name,))
+                    members = [row[0] for row in cursor.fetchall()]
+                    conn.close()
+
+                    # 3. Broadcast to online members
+                    forward_msg = f"GROUP_MSG_IN:{group_name}:{sender_name}:{content}"
+                    with clients_lock:
+                        online_recipients = {port: uname for port, uname in client_users.items() if uname in members}
+                        for port, uname in online_recipients.items():
+                            if port in clients:  # Check if client is still connected
+                                member_ip, _ = clients[port]
+                                server_socket.sendto(forward_msg.encode(), (member_ip, port))
+            except Exception as e:
+                print(f"{Colors.FAIL}Error handling GROUP_MSG: {e}{Colors.END}")
+            continue
+
+            # Handle Group History Request
+        if message_str.startswith("REQUEST_GROUP_HISTORY:"):
+            try:
+                _, group_name = message_str.split(":", 1)
+                conn = sqlite3.connect("userdata.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT sender_username, message, timestamp FROM group_chat_histories WHERE groupname=? ORDER BY timestamp",
+                    (group_name,)
+                )
+                history = cursor.fetchall()
+                conn.close()
+
+                for sender, msg, ts in history:
+                    history_msg = f"GROUP_HISTORY_MSG:{group_name}:{sender}:{msg}:{ts}"
+                    server_socket.sendto(history_msg.encode(), (client_ip, client_port))
+            except Exception as e:
+                print(f"{Colors.FAIL}Error handling REQUEST_GROUP_HISTORY: {e}{Colors.END}")
             continue
 
         # Broadcast regular messages with sender info
