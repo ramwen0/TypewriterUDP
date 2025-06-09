@@ -201,6 +201,9 @@ class GUI:
         self.registered_users = self.network_handler.registered_users
 
         self.add_member_list = {}
+        self.groups_map = self.network_handler.groups_map
+
+        self.user_groups = {}
 
         self.user_port = str(initial_port)
 
@@ -257,11 +260,11 @@ class GUI:
         groups_list_frame.pack_propagate(False)
 
         # - Groups list
-        groups_list = tk.Listbox(groups_list_frame,
+        self.groups_list = tk.Listbox(groups_list_frame,
                                  bg = self.sidebar_color, fg = self.text_fg,
                                  selectbackground = self.accent_color, selectforeground = "white",
                                  font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
-        groups_list.pack(side = "top", fill = "both", expand = True)
+        self.groups_list.pack(side = "top", fill = "both", expand = True)
 
         # == Group Buttons Frame
         group_buttons_frame = ttk.Frame(sidebar_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.15)
@@ -415,6 +418,8 @@ class GUI:
         self.chat_display.tag_config('message', foreground=self.text_fg, font=('Helvetica', 10))
         self.chat_display.tag_config('server', foreground=self.server_color, font=('Helvetica', 10, 'italic'))
         self.chat_display.tag_config('typing', foreground='#f5df3d', font=('Helvetica', 9, 'italic'))
+
+        self.gen_user_groups()
 
         #if initial_port:
             #self.client_listbox.insert(tk.END, f" Client {initial_port}")
@@ -644,6 +649,24 @@ class GUI:
             self.chat_display.insert(tk.END, f"{msg}\n", 'message')
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         self.chat_display.config(state='disabled')
+
+
+    def gen_user_groups(self):
+        self.user_groups = {}
+        self.groups_list.delete(0, tk.END)
+
+        for group_name in self.groups_map:
+            print(f"User Group: {group_name}")
+            group = self.groups_map.get(group_name)
+
+            if self.user_name in group["group_members"]:
+                self.user_groups[group_name] = group
+                print(f"{self.user_name} is in {group_name}")
+
+                display_text = f"{group_name}"
+
+                self.groups_list.insert(tk.END, display_text)
+
 
     # === Group Functionality ===
     def add_group(self):

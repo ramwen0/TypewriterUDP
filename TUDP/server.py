@@ -41,7 +41,7 @@ def init_database():
     cursor = conn.cursor()
 
     enable_foreignkey = """
-        PRAGMA foreign_keys = OFF;
+        PRAGMA foreign_keys = ON;
     """
     
     create_userdata = """
@@ -108,6 +108,7 @@ def periodic_client_updates():
         broadcast(f"[Server] CLIENTS:{client_list}")
 
         gen_all_users()
+        gen_groups_lists()
         
 
 # Start periodic updates thread
@@ -223,8 +224,9 @@ def handle_groups(message_str, client_ip, client_port):
             cursor.execute(insert_group_owner_data, (group_name, group_owner))
             cursor.execute(insert_group_data, (group_name, group_owner))
 
-            for member in group_members_list:
-                cursor.execute(insert_group_data, (group_name, member))
+            if group_members:
+                for member in group_members_list:
+                    cursor.execute(insert_group_data, (group_name, member))
 
             conn.commit()
 
@@ -262,6 +264,32 @@ def gen_all_users():
     conn.close()
 
     broadcast(f"[Server] REGISTERED_USERS:{users}")
+
+
+def gen_groups_lists():
+    groups_info = f"[Server] GROUPS_LISTS"
+
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+
+    get_group_info = """
+        SELECT o.groupname,
+               o.username owner,
+               GROUP_CONCAT(m.username) members
+        FROM user_group_owner o
+        LEFT JOIN user_group m ON o.groupname = m.groupname
+        GROUP BY o.groupname
+    """
+
+    cursor.execute(get_group_info)
+
+    for group_name, group_owner, group_members in cursor.fetchall():
+        groups_info += f":{group_name},{group_owner},{group_members}"
+        #print(f"Group: {group_name}, Owner: {group_owner}, All Members: {group_members}")
+
+    print(groups_info)
+
+    broadcast(groups_info)
 
 
 while True:

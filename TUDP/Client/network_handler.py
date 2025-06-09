@@ -13,6 +13,7 @@ class NetworkHandler:
         self.gui = None
         self.username_map = {}
         self.registered_users = {}
+        self.groups_map = {}
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -101,6 +102,24 @@ class NetworkHandler:
 
                             except ValueError:
                                 continue
+
+                        elif "[Server] GROUPS_LISTS:" in message:
+                            try:
+                                new_map = {}
+                                groups_info = message.split("GROUPS_LISTS:")[1]
+
+                                for group in groups_info.split(":"):
+                                    group_name, group_owner, group_members = group.split(",", 2)
+                                    new_map[group_name] = {
+                                        "group_owner": group_owner,
+                                        "group_members": group_members}
+
+                                self.groups_map = new_map
+                                print(f"Groups Map: {self.groups_map}")
+
+                            except ValueError:
+                                continue
+
                                 
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
