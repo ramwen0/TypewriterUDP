@@ -297,27 +297,41 @@ class NetworkHandler:
 
     # === Generates all the lists from the default client_list
     def gen_all_lists(self, client_list):
-        self.on_users_list = {}
-        self.off_users_list = self.registered_users
-        self.guests_list = {}
+        # Populates user lists based on the master client list from the server.
+        # client_list is a map of all connected users {port: username}.
 
-        print(f"Client list: {client_list}")
+        self.on_users_list = {}  # {port: username} for authenticated online users
+        self.guests_list = {}  # {port: username} for online guests
 
+        # Process a comma-separated string or list of registered users.
+        actual_registered_users = []
+        if isinstance(self.registered_users, list):
+            actual_registered_users = [u.strip() for u in self.registered_users if u.strip()]
+        elif isinstance(self.registered_users, str):
+            actual_registered_users = [u.strip() for u in self.registered_users.split(',') if u.strip()]
+
+        online_auth_usernames = []
+
+        # Sort users from the master list into 'guest' or 'authenticated'.
         for port, username in client_list.items():
-            print(f"user port: {port}, username: {username}")
-
-            # Handles if finds a guest
+            if not username:
+                continue
             if username.startswith("Guest_"):
                 self.guests_list[port] = username
-
-            # Handles if finds a user
             else:
                 self.on_users_list[port] = username
+                online_auth_usernames.append(username)
 
-            # Generate offline users list
-            for port, username in self.on_users_list.items():
-                if username in self.off_users_list:
-                    self.off_users_list.remove(username)
+        # (Logic for offline users would be determined here or in the GUI update function)
+        all_online_usernames = online_auth_usernames + list(self.guests_list.values())
+
+        self.off_users_list = [
+            user for user in actual_registered_users
+            if user and user not in all_online_usernames
+        ]
 
         if hasattr(self.gui, "update_client_list"):
-            self.gui.root.after(0, self.gui.update_client_list)
+            # Garantir que a GUI e a janela raiz existem antes de agendar a atualização
+            if self.gui and hasattr(self.gui, 'root') and self.gui.root.winfo_exists():
+                self.gui.root.after(0, self.gui.update_client_list)
+
