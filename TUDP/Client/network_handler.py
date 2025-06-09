@@ -53,12 +53,22 @@ class NetworkHandler:
                             self.gui.dms_btn.configure(text="DMs")
                     except ValueError:
                         continue
+
                 # ==== AUTH messages ==== #
                 elif message.startswith("AUTH_RESULT:"):
                     _, status, msg = message.split(":", 2)
                     success = status == "OK"
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
+
+                # === GROUPS messages ===
+                elif message.startswith("GROUPS_RESULT:"):
+                    _, status, msg = message.split(":", 2)
+                    success = status == "OK"
+
+                    if self.gui and hasattr(self.gui, "show_groups_result"):
+                        self.gui.show_groups_result(success, msg)
+
                 # ==== Server messages ==== #
                 elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
@@ -66,7 +76,6 @@ class NetworkHandler:
                             try:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
-                                print(f"On Server Username: {self.username_map}")
 
                                 self.gen_all_lists(self.username_map)
                             except ValueError:
@@ -79,11 +88,9 @@ class NetworkHandler:
                                     if ":" in entry:
                                         port, username = entry.split(":", 1)
                                         new_map[port] = username if username else f"Guest_{port}"
-                                        if hasattr(self.gui, "update_my_username"):
-                                            self.gui.root.after(0, self.gui.update_my_username, username)
+
                                     else:
                                         new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
-                                        print("new map: " + new_map)
                                 self.username_map = new_map  # Replace completely rather than update
                                 self.gen_all_lists(self.username_map)
                             except ValueError:
@@ -91,9 +98,6 @@ class NetworkHandler:
                         elif "REGISTERED_USERS:" in message:
                             try:
                                 self.registered_users = message.split("REGISTERED_USERS:")[1].split(",")
-
-                                print(self.registered_users)
-                                
 
                             except ValueError:
                                 continue
@@ -165,6 +169,23 @@ class NetworkHandler:
             msg = f"AUTH:{action}:{username}:{encrypted_password}"
         self.client_socket.sendto(msg.encode(), self.server_address)
 
+    def send_group(self, action, group_name, group_owner, group_member_list):
+        group_member_output = ""
+
+        for user in group_member_list:
+            group_member_output += f"{user},"
+
+        group_member_output = group_member_output[:-1]
+
+        if action == "create":
+            msg = f"GROUPS:{action}:{group_name}:{group_owner}:{group_member_output}"
+            print(msg)
+        elif action == "manage":
+            print("Manage group in database")
+
+        self.client_socket.sendto(msg.encode(), self.server_address)
+
+
     def get_port(self):
         return self.client_socket.getsockname()[1] if self.client_socket else None
 
@@ -189,22 +210,15 @@ class NetworkHandler:
             # Handles if finds a guest
             if username.startswith("Guest_"):
                 self.guests_list[port] = username
-                print("Found a Guest")
-                print(f"Guests list: {self.guests_list}")
                 
             # Handles if finds a user
             else:
                 self.on_users_list[port] = username
-                print("Found a User")
-                print(f"On Users List: {self.on_users_list}")
 
             # Generate offline users list
             for port, username in self.on_users_list.items():
                 if username in self.off_users_list:
                     self.off_users_list.remove(username)
-                   
-                print(f"Off Users List: {self.off_users_list}")
 
         if hasattr(self.gui, "update_client_list"):
-            self.gui.root.after(0, self.gui.update_client_list, self.on_users_list, self.off_users_list, self.guests_list)
-        
+            self.gui.root.after(0, self.gui.update_client_list)

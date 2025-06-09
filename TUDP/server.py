@@ -41,7 +41,7 @@ def init_database():
     cursor = conn.cursor()
 
     enable_foreignkey = """
-        PRAGMA foreign_keys = ON;
+        PRAGMA foreign_keys = OFF;
     """
     
     create_userdata = """
@@ -66,7 +66,7 @@ def init_database():
             groupname VARCHAR(255),
             username VARCHAR(255),
             PRIMARY KEY(groupname, username),
-            FOREIGN KEY(groupname) REFERENCES group_owner(groupname)
+            FOREIGN KEY(groupname) REFERENCES user_group_owner(groupname)
                 ON DELETE CASCADE ON UPDATE NO ACTION
         )
     """
@@ -105,7 +105,6 @@ def periodic_client_updates():
             if clients:  # Only send if there are clients
                 client_info = [f"{p}:{client_users.get(p, '')}" for p in clients]
                 client_list = ",".join(client_info)
-                #print(client_list)
         broadcast(f"[Server] CLIENTS:{client_list}")
 
         gen_all_users()
@@ -188,6 +187,57 @@ def handle_auth(message_str, client_ip, client_port):
     server_socket.sendto(result.encode(), (client_ip, client_port))
 
 
+def handle_groups(message_str, client_ip, client_port):
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+
+    parts = message_str.split(":")
+    action = parts[1]
+
+    if action == "create":
+        group_name = parts[2]
+        group_owner = parts[3]
+        group_members = parts[4]
+
+        group_members_list = [member for member in group_members.split(",")]
+        print(group_members_list)
+
+        verify_group_existence = """
+            SELECT username FROM user_group_owner WHERE groupname = ?
+        """
+
+        cursor.execute(verify_group_existence, (group_name, ))
+        output = cursor.fetchall()
+
+        if output:
+            result = f"GROUPS_RESULT:FAIL:Already exists a group with the name {group_name} owned by {output[0]}"
+        else:
+            insert_group_owner_data = """
+                INSERT INTO user_group_owner (groupname, username) VALUES (?, ?)
+            """
+
+            insert_group_data = """
+                INSERT INTO user_group (groupname, username) VALUES (?, ?)
+            """
+
+            cursor.execute(insert_group_owner_data, (group_name, group_owner))
+            cursor.execute(insert_group_data, (group_name, group_owner))
+
+            for member in group_members_list:
+                cursor.execute(insert_group_data, (group_name, member))
+
+            conn.commit()
+
+            result = f"GROUPS_RESULT:OK:Created successfully the group, {group_name}"
+
+
+    elif action == "manage":
+        print("Handling group action manage")
+
+    conn.close()
+    server_socket.sendto(result.encode(), (client_ip, client_port))
+
+
 # Generate a message with all registered clients on database
 def gen_all_users():
     all_clients = []
@@ -209,11 +259,7 @@ def gen_all_users():
 
     users = users[:-1]
 
-    print(users)
-
     conn.close()
-
-    
 
     broadcast(f"[Server] REGISTERED_USERS:{users}")
 
@@ -307,6 +353,11 @@ while True:
             except Exception as e:
                 print("DM parse error: ", e)
                 continue
+
+        # Handles Groups
+        if message_str.startswith("GROUPS:"):
+            handle_groups(message_str, client_ip, client_port)
+            continue
 
         # Broadcast regular messages with sender info
         with clients_lock:

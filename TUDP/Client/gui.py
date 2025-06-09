@@ -195,6 +195,18 @@ class GUI:
                         font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
 
     def setup_ui(self, initial_port=None):
+        self.on_users_dict = self.network_handler.on_users_list
+        self.off_users_dict = self.network_handler.off_users_list
+        self.guests_dict = self.network_handler.guests_list
+        self.registered_users = self.network_handler.registered_users
+
+        self.add_member_list = {}
+
+        self.user_port = str(initial_port)
+
+        self.user_name = self.on_users_dict.get(self.user_port) if self.user_port in self.on_users_dict else self.guests_dict.get(self.user_port)
+
+
         # === Defining Main Frame ===
         main_frame = ttk.Frame(self.root, style = 'Dark.TFrame')
         main_frame.pack(fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
@@ -393,7 +405,7 @@ class GUI:
         my_user_label_frame.pack_propagate(False)
 
         # = My User label
-        self.my_user_label = ttk.Label(my_user_label_frame, style = "Sidebar.TLabel", text = "Your Username")
+        self.my_user_label = ttk.Label(my_user_label_frame, style = "Sidebar.TLabel", text = self.user_name)
         self.my_user_label.pack(side = "top", fill = "y", expand = True)
 
 
@@ -499,7 +511,7 @@ class GUI:
         self.chat_display.config(state='disabled')
 
     # ==== list updates ==== #
-    def update_client_list(self, on_users, off_users, guests):
+    def update_client_list(self):
         if not hasattr(self, 'on_users_list') or not hasattr(self, 'off_users_list'): # guard against initialization before setup_ui is run
             print("Tried to update client list, but doesnt have ui initialized")
             return
@@ -508,17 +520,17 @@ class GUI:
         self.off_users_list.delete(0, tk.END)
 
         # Update on_users_list
-        for port, username in on_users.items():
+        for port, username in self.on_users_dict.items():
             display_text = f"{username} ({port})"
             self.on_users_list.insert(tk.END, display_text)
 
         # Update guests
         if self.chat_context == "all":
-            for port, username in guests.items():
+            for port, username in self.guests_dict.items():
                 display_text = f"{username}"
                 self.off_users_list.insert(tk.END, display_text)
         else:
-            for username in off_users:
+            for username in self.off_users_dict:
                 display_text = f"{username}"
                 self.off_users_list.insert(tk.END, display_text)
 
@@ -542,7 +554,6 @@ class GUI:
         if selection:
             index = selection[0]
             display_text = self.client_listbox.get(index)
-            print(display_text)
             # Extract port from list entry
             port = display_text.split("(")[-1].rstrip(")")
             self.selected_port = port
@@ -554,7 +565,6 @@ class GUI:
         self.dm_histories[port].append((sender, message, timestamp))
         # update display if it's the active chat
         if self.chat_context == "dm" and self.selected_port == port:
-            print(self.selected_port)
             self.display_dm_history(port)
 
     def dm_notify(self, from_port, to_port):
@@ -637,28 +647,175 @@ class GUI:
 
     # === Group Functionality ===
     def add_group(self):
-        create_group = tk.Toplevel()
-        _center_window(self, create_group, int(self.w_size[0] * 0.6), int(self.w_size[1] * 0.6))
-        create_group.title("Creating Group...")
+        all_users_list = self.network_handler.registered_users
 
-        create_group.grab_set()
+        self.add_group_window = tk.Toplevel()
+        _center_window(self, self.add_group_window, int(self.w_size[0] * 0.6), int(self.w_size[1] * 0.4))
+        self.add_group_window.title("Creating Group...")
 
-        
+        self.add_group_window.grab_set()
 
-        test_label = ttk.Label(create_group, style = "Dark.TLabel", text = "forgot the text")
-        test_label.pack()
+        # === Add Group Main Frame ===
+        add_group_main_frame = ttk.Frame(self.add_group_window, style = "Dark.TFrame")
+        add_group_main_frame.pack(side = "top", fill = "both", expand = True)
+        add_group_main_frame.pack_propagate(False)
 
-        create_group.mainloop()
+
+        # === Add Group All Inputs Frame ===
+        add_group_all_inputs_frame = ttk.Frame(add_group_main_frame, style = "Dark.TFrame", width = int(self.w_size[0] * 0.39))
+        add_group_all_inputs_frame.pack(side = "left", fill = "y", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        add_group_all_inputs_frame.pack_propagate(False)
+
+        # == Add Group Name Frame
+        add_group_name_frame = ttk.Frame(add_group_all_inputs_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
+        add_group_name_frame.pack(side = "top", fill = "x")
+        add_group_name_frame.pack_propagate(False)
+
+        # = Add Group Name Label
+        add_group_name_label = ttk.Label(add_group_name_frame, style = "Sidebar.TLabel", text = "Group Name:")
+        add_group_name_label.pack(side = "left", fill = "x", expand = True, padx = self.w_size[0] * 0.005)
+
+        # == Add Group Entry Frame
+        add_group_entry_frame = ttk.Frame(add_group_all_inputs_frame, style = "Sidebar.TFrame", height = self.w_size[1] * 0.08)
+        add_group_entry_frame.pack(side = "top", fill = "x")
+
+        # = Add Group Entry
+        self.add_group_entry = ttk.Entry(add_group_entry_frame, style = "Dark.TEntry", font = ('Helvetica', 10))
+        self.add_group_entry.pack(side = "left", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+
+
+        # === Free Space
+        add_group_free_space = ttk.Frame(add_group_all_inputs_frame, style = "Sidebar.TFrame")
+        add_group_free_space.pack(side = "top", fill = "both", expand = True, pady = (0, self.w_size[1] * 0.01))
+
+
+        # == Add Group Buttons Frame
+        add_group_buttons_frame = ttk.Frame(add_group_all_inputs_frame, style = "Sidebar.TFrame", height = int(self.w_size[1] * 0.15))
+        add_group_buttons_frame.pack(side = "top", fill = "x", pady = (self.w_size[1] * 0.01, 0))
+
+        # = Create Button
+        add_group_create_btn = ttk.Button(add_group_buttons_frame, style = "Dark.TButton", text = "Create",
+                                          command = lambda: self.create_group())
+        add_group_create_btn.pack(side = "left", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+
+        # = Cancel Button
+        add_group_cancel_btn = ttk.Button(add_group_buttons_frame, style = "Dark.TButton", text = "Cancel",
+                                          command = lambda: self.cancel_group())
+        add_group_cancel_btn.pack(side = "left", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+
+
+        # === Add Group Users Frame ===
+        add_group_users_frame = ttk.Frame(add_group_main_frame, style = "Sidebar.TFrame", width = int(self.w_size[0] * 0.19))
+        add_group_users_frame.pack(side = "left", fill = "y", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        add_group_users_frame.pack_propagate(False)
+
+        # == Add Group Users Label Frame
+        add_group_users_label_frame = ttk.Frame(add_group_users_frame, style = "Sidebar.TFrame", height = int(self.w_size[1] * 0.05))
+        add_group_users_label_frame.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        add_group_users_label_frame.pack_propagate(False)
+
+        # = Add Group Users Label
+        add_group_users_label = ttk.Label(add_group_users_label_frame, style = "Sidebar.TLabel", text = "Users")
+        add_group_users_label.pack(side = "top", fill = "y", expand = True)
+
+        ttk.Separator(add_group_users_label_frame, orient='horizontal').pack(fill="x")
+
+        # == Add Group Users List Frame
+        add_group_users_list_frame = ttk.Frame(add_group_users_frame, style = "Sidebar.TFrame")
+        add_group_users_list_frame.pack(side = "top", fill = "both", expand = True, padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
+        add_group_users_list_frame.pack_propagate(False)
+
+        # = Add Group Users List
+        self.add_group_users_list = tk.Listbox(
+            add_group_users_list_frame, bg = self.sidebar_color, fg = self.text_fg,
+            selectbackground = self.accent_color, selectforeground = "white",
+            font = ('Helvitica', 9), relief = "flat", highlightthickness = 0,
+            selectmode = tk.MULTIPLE
+        )
+        self.add_group_users_list.pack(side = "top", fill = "both", expand = True)
+
+        self.update_add_group_member_list()
+
+        self.add_group_window.mainloop()
 
         print("creating group")
+
+
+    def update_add_group_member_list(self):
+        if not hasattr(self, "add_group_users_list"):
+            print("Tried to update add group users list, but doesnt have ui initialized")
+            return
+
+        self.add_member_list = [value for value in self.registered_users if value != self.user_name]
+
+        self.add_group_users_list.delete(0, tk.END)
+
+        for user in self.add_member_list:
+            display_text = f"{user}"
+            self.add_group_users_list.insert(tk.END, display_text)
+
+        print(f"Excluded list: {self.add_member_list}")
+
+
+    def create_group(self):
+        error_not_logged = "You need to be logged in to be able to create groups."
+        warning_no_group_name = "Please enter a group name."
+        info_created_group = "Created group successfully!!"
+
+        # No users connected
+        if not self.on_users_list:
+            tk.messagebox.showerror("Cant create group...", error_not_logged)
+            self.add_group_window.destroy()
+            return
+
+        # Client its a guest
+        else:
+            print(f"User port: {self.user_port}")
+            print(f"On users port list: {self.on_users_dict.keys()}")
+            if not self.user_port in self.on_users_dict:
+                tk.messagebox.showerror("Cant create group...", error_not_logged)
+                self.add_group_window.destroy()
+                return
+
+            # Client is a user
+            else:
+                group_name = self.add_group_entry.get()
+                group_owner_port = self.user_port
+                group_owner_name = self.user_name
+
+                group_members_idx = self.add_group_users_list.curselection()
+                group_members = [self.add_member_list[idx] for idx in group_members_idx]
+
+
+                print(f"idxs: {group_members_idx}, members: {group_members}")
+
+
+                if not group_name:
+                    tk.messagebox.showwarning("Input required...", warning_no_group_name)
+                    return
+
+                self.network_handler.send_group("create", group_name, group_owner_name, group_members)
+
+
+                print(f"Group name: {group_name}, Group owner port: {group_owner_port}, Group owner name: {group_owner_name}")
+
+
+    def show_groups_result(self, status, msg):
+        if status == True:
+            self.add_group_window.destroy()
+            tk.messagebox.showinfo("Created Group", msg)
+
+        else:
+            print(f"Status: {status}")
+            tk.messagebox.showerror("Failed to Create Group...", msg)
+
+
+
+    def cancel_group(self):
+        self.add_group_window.destroy()
+        print("Canceled group creation!!")
+
 
     def manage_group(self):
         
         print("managing group")
-
-
-    # === Update my username label ===
-    def update_my_username(self, username):
-        if not hasattr(self, 'my_user_label'):
-            return
-        self.my_user_label.configure(text = username)
