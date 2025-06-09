@@ -351,9 +351,6 @@ class GUI:
             return
         self.client_listbox.delete(0, tk.END)
         for port, username in username_map.items():
-            if ":" in username:
-                username = username.split(":")[0]
-
             if username.startswith("Guest_"):
                 display_text = f"{username}"
             else:

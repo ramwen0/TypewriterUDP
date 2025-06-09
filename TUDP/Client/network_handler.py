@@ -106,15 +106,27 @@ class NetworkHandler:
                                 new_map = {}
                                 new_ip_map = {}
                                 for entry in client_info:
-                                    if ":" in entry:
-                                        port, username = entry.split(":", 1)
-                                        new_map[port] = username if username else f"Guest_{port}"
+                                    if not entry:  # Skip empty entries if the list ends with a comma
+                                        continue
 
-                                        if len(entry.split(":")) == 3:
-                                            _, _, ip = entry.split(":")
-                                            new_ip_map[port] = ip  # Store IP for file transfers
-                                    else:
-                                        new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
+                                    # Split port:username:ip
+                                    parts = entry.split(":")
+
+                                    if len(parts) < 2:
+                                        continue
+
+                                    port = parts[0]
+                                    username = parts[1]
+
+                                    if not username:
+                                        username = f"Guest_{port}"
+
+                                    new_map[port] = username
+
+                                    if len(parts) > 2:
+                                        ip = parts[2]
+                                        new_ip_map[port] = ip
+
                                 self.username_map = new_map  # Replace completely rather than update
 
                                 self.port_ip_map = new_ip_map  # Update IP map
