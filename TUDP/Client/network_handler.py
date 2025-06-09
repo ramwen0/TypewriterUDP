@@ -111,7 +111,7 @@ class NetworkHandler:
                                 self.gen_all_lists(self.username_map)
                                 self.known_user_map.update(self.username_map)
                                 if hasattr(self.gui, "update_client_list"):
-                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
+                                    self.gui.root.after(0, self.gui.update_client_list)
                             except ValueError:
                                 continue
                         elif "CLIENTS:" in message:
@@ -148,7 +148,7 @@ class NetworkHandler:
                                 self.known_user_map.update(new_map)
 
                                 if hasattr(self.gui, "update_client_list"):
-                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
+                                    self.gui.root.after(0, self.gui.update_client_list)
                                 self.gen_all_lists(self.username_map)
                             except ValueError:
                                 continue

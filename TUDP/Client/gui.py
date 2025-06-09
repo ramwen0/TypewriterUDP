@@ -1,6 +1,16 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
+import os
 from datetime import datetime
+import threading
+
+def _center_window(self, window, width, height):
+    screen_w = self.root.winfo_screenwidth()
+    screen_h = self.root.winfo_screenheight()
+    x = (screen_w - width) // 2
+    y = (screen_h - height) // 2
+    window.geometry(f"{width}x{height}+{x}+{y}")
+    window.resizable(False, False)
 
 class AuthGUI:
     def __init__(self, root, network_handler):
@@ -9,7 +19,7 @@ class AuthGUI:
         self.network_handler = network_handler
         self._setup_styles()
         self.root.configure(bg=self.bg_color)
-        self._center_window(300, 240)
+        _center_window(self,self.root,300, 240)
         self._setup_screen()
 
     def _setup_styles(self):
@@ -26,13 +36,6 @@ class AuthGUI:
         style.configure('Auth.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
         style.map('Auth.TButton', background=[('active', '#3a77c2')])
 
-    def _center_window(self, width, height):
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-        x = (screen_w - width) // 2
-        y = (screen_h - height) // 2
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.resizable(False, False)
 
     def clear_screen(self):
         for widget in self.root.winfo_children():
@@ -92,7 +95,14 @@ class AuthGUI:
     def show_result(self, success, msg):
         if success:
             self.clear_screen()
-            self.root.after(0, self.network_handler.gui.app.start_main_gui)
+            # Ensure app attribute is present, it's set in NetworkHandler.__init__
+            if hasattr(self, 'app') and hasattr(self.app, 'start_main_gui'):
+                self.root.after(0, self.app.start_main_gui)
+            elif hasattr(self.network_handler, 'gui') and hasattr(self.network_handler.gui, 'app') and hasattr(
+                    self.network_handler.gui.app, 'start_main_gui'):  # Fallback if app is on network_handler.gui
+                self.root.after(0, self.network_handler.gui.app.start_main_gui)
+            else:
+                print("Error: Could not find start_main_gui method.")  # Or handle error appropriately
         else:
             messagebox.showerror("Error", msg)
 
@@ -100,7 +110,14 @@ class GUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Typewriter UDP Client")
-        self.root.geometry("700x400")  # Increased size for better layout
+        w_aspect_ratio = [16, 9]
+        w_scale = 64  # [...,64, ...]
+        self.w_size = [w_aspect_ratio[0] * w_scale, w_aspect_ratio[1] * w_scale]
+
+        self.root.geometry(str(self.w_size[0]) + "x" + str(self.w_size[1]))
+        self.root.minsize(int(self.w_size[0] * 0.80), int(self.w_size[1] * 0.8))
+
+        self.root.resizable(True, True)
         self.network_handler = None
         self.setup_dark_theme()
         # ==== Typing management ==== #
@@ -110,9 +127,11 @@ class GUI:
             "groups": {}
         }
         # ==== DM UI ==== #
-        self.chat_context = "all" # changed to ("dm", recipient_port) or ("group", recipient_port)
-        self.dm_histories = {} # {recipient_port} : [ (sender, msg, time), ... ]
+        self.chat_context = "all"  # changed to ("dm", recipient_port) or ("group", recipient_port)
+        self.dm_histories = {}  # {recipient_port} : [ (sender, msg, time), ... ]
         self.selected_port = None
+        self.dm_refresh_interval = 5000
+        self.dm_refresh_thread = None
         # ==== All Chat UI ==== #
         self.all_chat_history = []
 
