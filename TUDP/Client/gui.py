@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import os
 from datetime import datetime
 import threading
@@ -340,7 +340,7 @@ class GUI:
         file_frame.pack_propagate(False)
 
         # - File
-        self.file_btn = ttk.Button(file_frame, text="File", style='Dark.TButton', width=100)
+        self.file_btn = ttk.Button(file_frame, text="File", style='Dark.TButton', width=100, command=self.on_file_button)
         self.file_btn.pack(side="right", fill="x", pady=0, padx=(5,0))
         self.file_btn.pack_propagate(False)
 
@@ -433,30 +433,40 @@ class GUI:
             #self.client_listbox.insert(tk.END, f" Client {initial_port}")
 
     # ==== Sidebar button functionality ==== #
-    def switch_chat_mode(self, mode):
+    def switch_chat_mode(self, mode, selected_user_port=None, selected_user_name=None):
         self.chat_context = mode
+        self.selected_port = selected_user_port
+        self.selected_username = selected_user_name
 
         # Update button styles
         self.all_chat_btn.configure(style='Active.TButton' if mode == 'all' else 'Inactive.TButton')
         self.dms_btn.configure(style='Active.TButton' if mode == 'dm' else 'Inactive.TButton')
-        #self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
+        # self.group_chats_btn.configure(style='Active.TButton' if mode == 'groups' else 'Inactive.TButton')
 
-        # Update Active Chat label
-        self.active_chat_label.configure(text = "All Chat" if mode == 'all' else "DMs")
+        # Clear chat display
+        self.chat_display.config(state='normal')
+        self.chat_display.delete("1.0", tk.END)
+        self.chat_display.config(state='disabled')
 
-        # Update offline users label
-        self.off_users_label.configure(text = "Guests" if mode == 'all' else "Offline Users")
-
-        # Call the appropriate update method
         if mode == 'all':
-            self.update_all_chat()
-            print("in all chat mode")
+            self.active_chat_label.config(text="All Chat")
+            self.update_all_chat()  # Display history for all chat
+            self.selected_port = None
+            self.selected_username = None
         elif mode == 'dm':
-            #self.update_user_list()
-            print("in dm mode")
+            if self.selected_port and self.selected_username:
+                self.active_chat_label.config(text=f"DM with {self.selected_username}")
+                self.request_dm_history(self.selected_username)  # Load and display DM history
+            else:
+                self.active_chat_label.config(text="DMs - Select a user")
+            self.dms_btn.configure(text="DMs")  # Clear notification dot
         elif mode == 'groups':
-            self.update_group_ui()
-            print("in group mode")
+            self.active_chat_label.config(text="Group Chats")
+            # Placeholder for group chat display logic
+            self.selected_port = None
+            self.selected_username = None
+
+        self.update_client_list()
 
     def all_chat(self):
         self.switch_chat_mode('all')
@@ -514,62 +524,104 @@ class GUI:
 
     # ==== list updates ==== #
     def update_client_list(self):
-        if not hasattr(self, 'on_users_list') or not hasattr(self, 'off_users_list'): # guard against initialization before setup_ui is run
-            print("Tried to update client list, but doesnt have ui initialized")
+        # Refreshes the GUI's user list widgets.
+
+        # Guard clause: stop if UI/data isn't ready or the window is closed.
+        if (not hasattr(self, 'network_handler') or self.network_handler is None or
+                not hasattr(self.network_handler, 'on_users_list') or
+                not hasattr(self, 'on_users_list') or not self.root.winfo_exists()):
             return
 
+        # Clear both user listboxes.
         self.on_users_list.delete(0, tk.END)
         self.off_users_list.delete(0, tk.END)
 
-        # Update on_users_list
-        for port, username in self.on_users_dict.items():
-            display_text = f"{username} ({port})"
-            self.on_users_list.insert(tk.END, display_text)
+        my_port_str = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port_str)
 
-        # Update guests
-        if self.chat_context == "all":
-            for port, username in self.guests_dict.items():
-                display_text = f"{username}"
-                self.off_users_list.insert(tk.END, display_text)
+        # Populate the first listbox with authenticated online users, excluding self.
+        sorted_online_auth_users = sorted(
+            self.network_handler.on_users_list.items(),
+            key=lambda item: item[1].lower()
+        )
+        for port, username in sorted_online_auth_users:
+            if port != my_port_str:
+                self.on_users_list.insert(tk.END, f"{username} ({port})")
+
+        # Populate the second listbox based on the current chat context.
+        if self.chat_context == 'dm':
+            # In DM mode, show registered users who are currently offline.
+            self.off_users_label.config(text="Offline Users")
+
+            offline_users_iterable = self.network_handler.off_users_list or []
+            sorted_offline_registered_users = sorted(list(offline_users_iterable))
+
+            for username in sorted_offline_registered_users:
+                if username != my_username and username not in self.network_handler.on_users_list.values():
+                    self.off_users_list.insert(tk.END, username)
         else:
-            for username in self.off_users_dict:
-                display_text = f"{username}"
-                self.off_users_list.insert(tk.END, display_text)
+            # In other modes (e.g., 'all' chat), show online guests.
+            self.off_users_label.config(text="Guests")
 
-
-
-
-        #self.client_listbox.delete(0, tk.END)
-        #for port, username in username_map.items():
-            #if username.startswith("Guest_"):
-                #display_text = f"{username}"
-            #else:
-                #display_text = f"{username} ({port})"
-            #self.client_listbox.insert(tk.END, display_text)
+            guests_iterable = self.network_handler.guests_list or {}
+            sorted_guests = sorted(
+                guests_iterable.items(),
+                key=lambda item: item[1].lower()
+            )
+            for port, username in sorted_guests:
+                if port != my_port_str:
+                    self.off_users_list.insert(tk.END, f"{username}")
 
 
     # ==== DM chat functionality ==== #
     def on_client_select(self, event):
-        if self.chat_context != "dm":
-            return
-        selection = self.client_listbox.curselection()
+        # This method is now general and can be used to select a user for DM
+        selection = self.on_users_list.curselection()
         if selection:
             index = selection[0]
-            display_text = self.client_listbox.get(index)
-            # Extract username and port from list entry
-            parts = display_text.split("(")
-            username = parts[0].strip()
-            port = parts[1].rstrip(")") if len(parts) > 1 else None
-            self.selected_port = port
-            self.selected_username = username
+            display_text = self.on_users_list.get(index)
 
-            # Clear current display
-            self.chat_display.config(state='normal')
-            self.chat_display.delete("1.0", tk.END)
-            self.chat_display.config(state='disabled')
+            # Extract username and port from list entry "username (port)"
+            # Assumes format "Username (12345)" for authenticated users
+            # and "Guest_12345" for guests (who might not show port explicitly in list)
+            username = ""
+            port = None
 
-            # Request fresh history
-            self.request_dm_history(username)
+            if "(" in display_text and ")" in display_text:
+                parts = display_text.split("(")
+                username = parts[0].strip()
+                port_part = parts[1].rstrip(")").strip()
+                if port_part.isdigit():
+                    port = port_part
+                else:  # Fallback if port is not directly in brackets, try to find from username_map
+                    for p, u_name in self.network_handler.username_map.items():
+                        if u_name == username:
+                            port = p
+                            break
+            elif display_text.startswith("Guest_"):
+                try:
+                    port = display_text.split("_")[1]
+                    username = display_text
+                except IndexError:
+                    print(f"Could not parse port from guest: {display_text}")
+                    return  # Cannot DM if port cannot be parsed
+            else:  # If it's just a username (e.g. from a different list or context)
+                username = display_text.strip()
+                # Attempt to find port from username_map
+                for p, u_name in self.network_handler.username_map.items():
+                    if u_name == username:
+                        port = p
+                        break
+
+            if username and port:
+                if str(port) == str(self.network_handler.get_port()):
+                    # print("Cannot DM yourself.") # Optional: prevent self-DM
+                    return
+
+                # Switch to DM mode with the selected user
+                self.switch_chat_mode('dm', selected_user_port=str(port), selected_user_name=username)
+            else:
+                print(f"Could not determine user/port for DM: {display_text}")
 
     def display_dm_message(self, port, sender, message, timestamp):
         # Get the username associated with this port
