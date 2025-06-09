@@ -2,10 +2,11 @@ import socket
 import threading
 import hashlib
 from datetime import datetime
+from file_transfer_handler import FileTransferHandler
 
 class NetworkHandler:
     def __init__(self):
-        self.server_address = ("127.0.0.1", 12345)
+        self.server_address = ("85.243.194.132", 12345)
         self.buffer_size = 1024
         self.client_socket = None
         self.running = True
@@ -14,6 +15,11 @@ class NetworkHandler:
         self.username_map = {}
         self.registered_users = {}
         self.groups_map = {}
+
+        self.file_transfer_handler = None
+        self.port_ip_map = {}  # Maps ports to IP addresses for file transfers
+
+        self.known_user_map = {}
 
     def setup_network(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -33,15 +39,34 @@ class NetworkHandler:
             try:
                 data, _ = self.client_socket.recvfrom(self.buffer_size)
                 message = data.decode()
-                print(message)
+                # ==== Skip ==== #
+                if (
+                        message.startswith("REQUEST_DM_HISTORY:") or
+                        message.startswith("REQUEST_MY_DM_HISTORY:") or
+                        message.startswith("DM:")
+                ):
+                    continue  # Ignore these messages in the UI
+                # ==== DM history ==== #
+                if message.startswith("DM_HISTORY:"):  # Keep processing history responses
+                    try:
+                        _, sender, recipient, content, timestamp = message.split(":", 4)
+                        if self.gui and hasattr(self.gui, "process_dm_history"):
+                            self.gui.root.after(0, self.gui.process_dm_history,
+                                                sender, recipient, content, timestamp)
+                    except ValueError:
+                        continue
+
+                    # ==== Skip REQUEST_DM_HISTORY from appearing in all chat ==== #
+                elif message.startswith("REQUEST_DM_HISTORY:"):
+                    continue  # Ignore these messages in the UI
                 # ==== DM Notify ==== #
-                if message.startswith("DM_NOTIFY:"):
+                elif message.startswith("DM_NOTIFY:"):
                     _, from_port, to_port = message.split(":", 2)
                     if self.gui and hasattr(self.gui, "dm_notify"):
                         self.gui.dm_notify(from_port, to_port)
                         continue
                 # ==== DM messages ==== #
-                if message.startswith("DM:"):
+                elif message.startswith("DM:"):
                     try:
                         _, sender_port, dm_content = message.split(":", 2)
                         sender = self.username_map.get(sender_port, f"User {sender_port}")
@@ -59,6 +84,11 @@ class NetworkHandler:
                 elif message.startswith("AUTH_RESULT:"):
                     _, status, msg = message.split(":", 2)
                     success = status == "OK"
+                    if success:
+                        if "logged in as " in msg:
+                            username = msg.split("logged in as ")[-1]
+                        elif "registered successfully" in msg:
+                            username = msg.split("registered successfully")[-1]
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
 
@@ -79,20 +109,46 @@ class NetworkHandler:
                                 self.username_map[port] = username
 
                                 self.gen_all_lists(self.username_map)
+                                self.known_user_map.update(self.username_map)
+                                if hasattr(self.gui, "update_client_list"):
+                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                             except ValueError:
                                 continue
                         elif "CLIENTS:" in message:
                             try:
                                 client_info = message.split("CLIENTS:")[1].split(",")
                                 new_map = {}
+                                new_ip_map = {}
                                 for entry in client_info:
-                                    if ":" in entry:
-                                        port, username = entry.split(":", 1)
-                                        new_map[port] = username if username else f"Guest_{port}"
+                                    if not entry:  # Skip empty entries if the list ends with a comma
+                                        continue
 
-                                    else:
-                                        new_map[entry] = f"Guest_{entry}"  # Handle unauthenticated clients
+                                    # Split port:username:ip
+                                    parts = entry.split(":")
+
+                                    if len(parts) < 2:
+                                        continue
+
+                                    port = parts[0]
+                                    username = parts[1]
+
+                                    if not username:
+                                        username = f"Guest_{port}"
+
+                                    new_map[port] = username
+
+                                    if len(parts) > 2:
+                                        ip = parts[2]
+                                        new_ip_map[port] = ip
+
                                 self.username_map = new_map  # Replace completely rather than update
+
+                                self.port_ip_map = new_ip_map  # Update IP map
+
+                                self.known_user_map.update(new_map)
+
+                                if hasattr(self.gui, "update_client_list"):
+                                    self.gui.root.after(0, self.gui.update_client_list, self.username_map)
                                 self.gen_all_lists(self.username_map)
                             except ValueError:
                                 continue
@@ -120,9 +176,22 @@ class NetworkHandler:
                             except ValueError:
                                 continue
 
-                                
+
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
+
+                # ==== File transfer notifications ==== #
+                elif message.startswith("FILE_REQ:"):
+                    _, from_port, filename, filesize = message.split(":", 3)
+                    if self.gui and hasattr(self.gui, "on_file_request"):
+                        self.gui.root.after(0, self.gui.on_file_request, from_port, filename, int(filesize))
+                    continue
+                elif message.startswith("FILE_RES:"):
+                    _, to_port, status = message.split(":", 2)
+                    if self.gui and hasattr(self.gui, "on_file_response"):
+                        self.gui.root.after(0, self.gui.on_file_response, to_port, status)
+                    continue
+
                 # ==== Typing messages ==== #
                 elif message.startswith("typing:"):
                     try:
@@ -147,16 +216,18 @@ class NetworkHandler:
                                 sender = self.username_map.get(port.strip(), port.strip())
 
                         # Display the message
-                        self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
-                        if not self.gui.chat_context == 'all':
-                            self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
-                        else:
-                            self.gui.all_chat_btn.configure(text="All Chat")
+                        if hasattr(self.gui, "display_message") and sender and content:
+                            self.gui.display_message(sender.strip(), content.strip(), datetime.now().strftime("%H:%M"))
 
-                        # Clear typing indicator if we have port info
-                        if hasattr(self.gui, 'clear_typing_text'):
-                            if sender.strip().isdigit():  # If sender is a port number
-                                self.gui.clear_typing_text(int(sender.strip()))
+                            if not self.gui.chat_context == 'all':
+                                self.gui.all_chat_btn.configure(text="All Chat •")  # Add notification dot
+                            else:
+                                self.gui.all_chat_btn.configure(text="All Chat")
+
+                            # Clear typing indicator if we have port info
+                            if hasattr(self.gui, 'clear_typing_text'):
+                                if sender.strip().isdigit():  # If sender is a port number
+                                    self.gui.clear_typing_text(int(sender.strip()))
                     except (ValueError, IndexError):
                         continue
 
@@ -215,6 +286,15 @@ class NetworkHandler:
             self.running = False
             self.client_socket.close()
 
+    # File Transfer Methods
+    def send_file_request(self, recipient_port, filename, filesize):
+        msg = f"FILE_REQ:{recipient_port}:{filename}:{filesize}"
+        self.client_socket.sendto(msg.encode(), self.server_address)
+
+    def send_file_response(self, sender_port, accepted):
+        msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}"
+        self.client_socket.sendto(msg.encode(), self.server_address)
+
     # === Generates all the lists from the default client_list
     def gen_all_lists(self, client_list):
         self.on_users_list = {}
@@ -229,7 +309,7 @@ class NetworkHandler:
             # Handles if finds a guest
             if username.startswith("Guest_"):
                 self.guests_list[port] = username
-                
+
             # Handles if finds a user
             else:
                 self.on_users_list[port] = username

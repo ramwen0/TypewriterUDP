@@ -2,15 +2,6 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
-def _center_window(self, window, width, height):
-    screen_w = self.root.winfo_screenwidth()
-    screen_h = self.root.winfo_screenheight()
-    x = (screen_w - width) // 2
-    y = (screen_h - height) // 2
-    window.geometry(f"{width}x{height}+{x}+{y}")
-    window.resizable(False, False)
-
-
 class AuthGUI:
     def __init__(self, root, network_handler):
         self.root = root
@@ -18,7 +9,7 @@ class AuthGUI:
         self.network_handler = network_handler
         self._setup_styles()
         self.root.configure(bg=self.bg_color)
-        _center_window(self, self.root, 300, 240)
+        self._center_window(300, 240)
         self._setup_screen()
 
     def _setup_styles(self):
@@ -35,6 +26,13 @@ class AuthGUI:
         style.configure('Auth.TButton', font=('Segoe UI', 10, 'bold'), background=self.accent_color, foreground='white')
         style.map('Auth.TButton', background=[('active', '#3a77c2')])
 
+    def _center_window(self, width, height):
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        x = (screen_w - width) // 2
+        y = (screen_h - height) // 2
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.resizable(False, False)
 
     def clear_screen(self):
         for widget in self.root.winfo_children():
@@ -102,16 +100,7 @@ class GUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Typewriter UDP Client")
-
-        w_aspect_ratio = [16, 9]
-        w_scale = 64 # [...,64, ...]
-        self.w_size = [w_aspect_ratio[0] * w_scale, w_aspect_ratio[1] * w_scale]
-
-        self.root.geometry(str(self.w_size[0]) + "x" + str(self.w_size[1]))
-        self.root.minsize(int(self.w_size[0] * 0.80), int(self.w_size[1] * 0.8))
-        
-        self.root.resizable(True, True)
-        
+        self.root.geometry("700x400")  # Increased size for better layout
         self.network_handler = None
         self.setup_dark_theme()
         # ==== Typing management ==== #
@@ -144,10 +133,10 @@ class GUI:
         style.theme_use('clam')
 
         # Configure styles
-        style.configure('Dark.TFrame', background=self.bg_color)#, borderwidth = 10, relief = tk.GROOVE)
-        style.configure('Sidebar.TFrame', background=self.sidebar_color)#, borderwidth = 10, relief = tk.GROOVE)
-        style.configure('Dark.TEntry', borderwidth = 0,
-                        fieldbackground=self.sidebar_color,
+        style.configure('Dark.TFrame', background=self.bg_color)
+        style.configure('Sidebar.TFrame', background=self.sidebar_color)
+        style.configure('Dark.TEntry',
+                        fieldbackground=self.entry_bg,
                         foreground=self.text_fg,
                         insertcolor=self.text_fg,
                         bordercolor="#444",
@@ -185,11 +174,11 @@ class GUI:
                         background=self.bg_color,
                         foreground=self.text_fg,
                         font=('Segoe UI', 12, 'bold'))
-        style.configure('Sidebar.TLabel', 
+        style.configure('Sidebar.TLabel',
                         background = self.sidebar_color,
                         foreground = self.text_fg,
                         font = ('Segoe UI', 12, 'bold'))
-        style.configure('Sidebar.TList', 
+        style.configure('Sidebar.TList',
                         bg = self.entry_bg, fg = self.text_fg,
                         selectbackground = self.accent_color, selectforeground = "white",
                         font = ('Helvetica', 9), relief = "flat", highlightthickness = 0)
@@ -231,7 +220,7 @@ class GUI:
                                        command=lambda: self.switch_chat_mode('all'),
                                        style='Active.TButton' if self.chat_context == 'all' else 'Sidebar.TButton')
         self.all_chat_btn.pack(fill="x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
-        
+
         # = DM Chat Button
         self.dms_btn = ttk.Button(chat_buttons_frame, text="DMs",
                                   command=lambda: self.switch_chat_mode('dm'),
@@ -275,7 +264,7 @@ class GUI:
         add_group_btn = ttk.Button(group_buttons_frame, style = "Active.TButton", text = "Add Group",
                                    command = lambda: self.add_group())
         add_group_btn.pack(side = "top", fill = "x", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
-        
+
         # = Manage Group Button
         manage_group_btn = ttk.Button(group_buttons_frame, style = "Active.TButton", text = "Manage Group",
                                    command = lambda: self.manage_group())
@@ -326,7 +315,7 @@ class GUI:
         self.message_entry.bind('<KeyRelease>', self.on_typing)
         self.message_entry.bind('<Return>', self.send_message)
 
-        # = FIle frame 
+        # = FIle frame
         file_frame = ttk.Frame(all_inputs_frame, style = "Sidebar.TFrame", width = self.w_size[0] * 0.15)
         file_frame.pack(side = "right", fill = "y", padx = self.w_size[0] * 0.005, pady = self.w_size[1] * 0.01)
         file_frame.pack_propagate(False)
@@ -356,7 +345,7 @@ class GUI:
         on_users_label = ttk.Label(on_users_label_frame, style = "Sidebar.TLabel", text = "Online Users")
         on_users_label.pack(side = "top", fill = "y")
 
-        ttk.Separator(on_users_label_frame, orient='horizontal').pack(fill="x") 
+        ttk.Separator(on_users_label_frame, orient='horizontal').pack(fill="x")
 
         # = Online Users list Frame
         on_users_list_frame = ttk.Frame(on_users_frame, style = "Sidebar.TFrame")
@@ -467,52 +456,41 @@ class GUI:
                 (context == 'dm' and self.chat_context != 'dm'):
             return
 
+        # A unique, predictable tag for each user's indicator
+        tag_name = f"typing_indicator_{sender}_{context}"
+
         self.chat_display.config(state='normal')
-        indicators = self.typing_indicators[context]
 
-        # Clear previous indicator if exists
-        if sender in indicators:
-            self.chat_display.delete(indicators[sender], f"{indicators[sender]} lineend")
+        # 1. Find the range of the old indicator text using its tag.
+        tag_range = self.chat_display.tag_ranges(tag_name)
+        if tag_range:
+            # If the tag exists, delete the text between its start and end indices.
+            self.chat_display.delete(tag_range[0], tag_range[1])
 
-        # Add new indicator at the end
-        pos = self.chat_display.index('end-1c')
-        self.chat_display.insert(pos, f"\n{sender} is typing: {text}", 'typing')
-        indicators[sender] = pos  # Store the position
-        self.chat_display.see('end')
+        # 2. If the user is still typing (the received text is not empty), add the new indicator.
+        if text:
+            indicator_text = f"{sender} is typing: {text}\n"
+
+            self.chat_display.insert(tk.END, indicator_text, ('typing', tag_name))
+
+        self.chat_display.see(tk.END)
         self.chat_display.config(state='disabled')
 
     def on_typing(self, event=None):
         text = self.message_entry.get()
-        if text and self.network_handler:
+        if self.network_handler:
             context = 'dm' if self.chat_context == 'dm' else 'all'
             self.network_handler.send_typing(text, context)
 
-        # Clear existing typing indicator
-        self.clear_typing_text("You", context=self.chat_context)
-
     def clear_typing_text(self, sender, context="all"):
-        if context not in self.typing_indicators:
-            return
+        tag_name = f"typing_indicator_{sender}_{context}"
 
-        if sender in self.typing_indicators[context]:
-            idx = self.typing_indicators[context].pop(sender)
-            self.chat_display.config(state='normal')
-            self.chat_display.delete(idx, f"{idx} lineend")
-            self.chat_display.config(state='disabled')
-
-    def _display_typing(self, sender, text, context):
         self.chat_display.config(state='normal')
-        indicators = self.typing_indicators[context]
 
-        if sender not in indicators:
-            idx = self.chat_display.index('end-1c')
-            self.chat_display.insert(idx, "\n", 'typing')
-            indicators[sender] = idx
+        tag_range = self.chat_display.tag_ranges(tag_name)
+        if tag_range:
+            self.chat_display.delete(tag_range[0], tag_range[1])
 
-        idx = indicators[sender]
-        self.chat_display.delete(idx, f"{idx} lineend")
-        self.chat_display.insert(idx, f"{sender} is typing: {text}", 'typing')
-        self.chat_display.see('end')
         self.chat_display.config(state='disabled')
 
     # ==== list updates ==== #
@@ -539,7 +517,7 @@ class GUI:
                 display_text = f"{username}"
                 self.off_users_list.insert(tk.END, display_text)
 
-        
+
 
 
         #self.client_listbox.delete(0, tk.END)
@@ -552,61 +530,250 @@ class GUI:
 
 
     # ==== DM chat functionality ==== #
-    def on_client_select(self, event): # function to select a user from the list and get into their DM's
+    def on_client_select(self, event):
         if self.chat_context != "dm":
             return
         selection = self.client_listbox.curselection()
         if selection:
             index = selection[0]
             display_text = self.client_listbox.get(index)
-            # Extract port from list entry
-            port = display_text.split("(")[-1].rstrip(")")
+            # Extract username and port from list entry
+            parts = display_text.split("(")
+            username = parts[0].strip()
+            port = parts[1].rstrip(")") if len(parts) > 1 else None
             self.selected_port = port
-            self.display_dm_history(port)
+            self.selected_username = username
+
+            # Clear current display
+            self.chat_display.config(state='normal')
+            self.chat_display.delete("1.0", tk.END)
+            self.chat_display.config(state='disabled')
+
+            # Request fresh history
+            self.request_dm_history(username)
 
     def display_dm_message(self, port, sender, message, timestamp):
+        # Get the username associated with this port
+        username = self.network_handler.username_map.get(port, f"User {port}")
+
+        self.clear_typing_text(username, context="dm")
+
         if port not in self.dm_histories:
-            self.dm_histories[port] = [] # new entry for new chat
-        self.dm_histories[port].append((sender, message, timestamp))
-        # update display if it's the active chat
+            self.dm_histories[port] = []
+            # Add a conversation header if this is a new chat
+            self.dm_histories[port].append(
+                ("System", f"You're now chatting with {username}", timestamp)
+            )
+
+        # Add the message to history
+        display_sender = "You" if sender == str(self.network_handler.get_port()) else username
+        self.dm_histories[port].append((display_sender, message, timestamp))
+
+        # Update display if this is the active chat
         if self.chat_context == "dm" and self.selected_port == port:
-            self.display_dm_history(port)
+            self.display_dm_history(username)
 
     def dm_notify(self, from_port, to_port):
         self_port = str(self.network_handler.get_port())
         other_port = from_port if to_port == self_port else to_port
+        other_username = self.network_handler.username_map.get(other_port, f"User {other_port}")
 
-        #init history if non-existent
-        if other_port not in self.dm_histories:
-            self.dm_histories[other_port] = []
-            # banner message
-            other_username = self.network_handler.user_map.get(other_port, f"User {other_port}")
+        # Initialize history if non-existent
+        if other_username not in self.dm_histories:
+            self.dm_histories[other_username] = []
+            # Add banner message
             banner_msg = f"You're in a chat with {other_username}"
-            self.dm_histories[other_port].append(("System", banner_msg, datetime.now().strftime("%H:%M")))
+            self.dm_histories[other_username].append(("System", banner_msg, datetime.now().strftime("%H:%M")))
 
         if self.chat_context == "dm":
-            self.selected_port = other_port
-            self.display_dm_history(other_port)
+            self.selected_username = other_username
+            self.display_dm_history(other_username)
 
-    def display_dm_history(self, port): # function to refresh DM messages with user in PORT
+    # ==== DM history handling ==== #
+
+    def display_dm_history(self, username):
         self.chat_display.config(state='normal')
         self.chat_display.delete("1.0", tk.END)
-        dm_history = self.dm_histories.get(port, [])
-        for sender, msg, time in dm_history:
-            self.chat_display.insert(tk.END, f"{sender}\n", 'username')
-            self.chat_display.insert(tk.END, f"{msg}\n", 'message')
-            self.chat_display.insert(tk.END, f"{time}\n", 'time')
+
+        # Find the port associated with this username
+        port = None
+        for p, uname in self.network_handler.username_map.items():
+            if uname == username:
+                port = p
+                break
+
+        if port is None or port not in self.dm_histories:
+            self.chat_display.config(state='disabled')
+            return
+
+        # Add conversation header
+        self.chat_display.insert(tk.END,
+                                 f"Conversation with {username}\n{'=' * 30}\n",
+                                 'server')
+
+        # Add messages in chronological order
+        for sender, message, time in sorted(self.dm_histories.get(port, []), key=lambda x: x[2]):
+            if sender == "System":
+                self.chat_display.insert(tk.END, f"{message}\n", 'server')
+                continue
+
+            prefix = "You: " if sender == "You" else f"{username}: "
+            self.chat_display.insert(tk.END, f"{prefix}{message}\n", 'message')
+            self.chat_display.insert(tk.END, f"({time})\n\n", 'time')
+
         self.chat_display.config(state='disabled')
+        self.chat_display.see('end')
 
-    # ==== message handling ==== #
+    def process_dm_history(self, sender, recipient, message, timestamp):
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
+
+        # Determine which user this conversation is with
+        if sender == my_username:
+            other_user = recipient
+        else:
+            other_user = sender
+
+        # Find the port associated with this user
+        other_port = None
+        for port, username in self.network_handler.username_map.items():
+            if username == other_user:
+                other_port = port
+                break
+
+        if other_port is None:
+            return
+
+        # Initialize history if needed
+        if other_port not in self.dm_histories:
+            self.dm_histories[other_port] = []
+            # Add conversation header
+            self.dm_histories[other_port].append(
+                ("System", f"Conversation with {other_user}", timestamp)
+            )
+
+        # Check if this message already exists in history to avoid duplicates
+        message_exists = any(
+            existing_msg[1] == message and existing_msg[2] == timestamp
+            for existing_msg in self.dm_histories[other_port]
+            if existing_msg[0] != "System"  # Skip checking system messages
+        )
+
+        if not message_exists:
+            # Add to history with proper direction indicator
+            direction = "You" if sender == my_username else other_user
+            self.dm_histories[other_port].append((direction, message, timestamp))
+
+            # Update display if viewing this conversation
+            if (self.chat_context == "dm" and
+                    hasattr(self, 'selected_port') and
+                    self.selected_port == other_port):
+                self.display_dm_history(other_user)
+
+    def request_dm_history(self, other_username):
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
+        if my_username and other_username:
+            # Find the port for this user
+            other_port = None
+            for port, username in self.network_handler.username_map.items():
+                if username == other_username:
+                    other_port = port
+                    break
+
+            if other_port:
+                # Clear existing history before requesting new
+                if other_port in self.dm_histories:
+                    self.dm_histories[other_port] = []
+
+            # Request history between both users!
+            self.network_handler.send_message(f"REQUEST_DM_HISTORY:{my_username}:{other_username}")
+
+    def add_dm_history(self, sender, recipient, content, timestamp):
+        """Properly organize historical DMs by conversation"""
+        my_port = str(self.network_handler.get_port())
+        my_username = self.network_handler.username_map.get(my_port)
+
+        # Determine which user this conversation is with
+        if sender == my_username:
+            other_user = recipient
+        else:
+            other_user = sender
+
+        # Initialize history if needed
+        if other_user not in self.dm_histories:
+            self.dm_histories[other_user] = []
+            # Add conversation header
+            self.dm_histories[other_user].append(
+                ("System", f"Conversation with {other_user}", timestamp)
+            )
+
+        # Add to history with proper direction indicator
+        direction = "You" if sender == my_username else other_user
+        self.dm_histories[other_user].append((direction, content, timestamp))
+
+        # Update display if viewing this conversation
+        if (self.chat_context == "dm" and
+                hasattr(self, 'selected_username') and
+                self.selected_username == other_user):
+            self.display_dm_history(other_user)
+
+    def load_dm_history(self):
+        """Request DM history from server for all known users"""
+        if hasattr(self.network_handler, 'username_map'):
+            my_port = str(self.network_handler.get_port())
+            my_username = self.network_handler.username_map.get(my_port)
+            if my_username and not my_username.startswith("Guest_"):
+                # Request history for all authenticated users
+                for port, username in self.network_handler.username_map.items():
+                    if (not username.startswith("Guest_")) and port != my_port:
+                        self.request_dm_history(username)
+
+    def load_known_users_history(self):
+        """Fetch history for known authenticated users"""
+        if hasattr(self.network_handler, "username_map"):
+            my_port = str(self.network_handler.get_port())
+            for port, username in self.network_handler.username_map.items():
+                # Skip guests and ourselves
+                if (not username.startswith("Guest_")
+                        and port != my_port):
+                    self.request_dm_history(username)
+
+    # ==== DM history refresh ==== #
+    def start_dm_refresh_thread(self):
+        """Start the thread that periodically refreshes DM history"""
+        if not hasattr(self, 'dm_refresh_thread') or not self.dm_refresh_thread:
+            self.root.after(self.dm_refresh_interval, self.refresh_dm_history)
+
+    def refresh_dm_history(self):
+        """Periodically refresh DM history for active conversations"""
+        if self.chat_context == "dm" and self.selected_port:
+            # Get both usernames
+            my_port = str(self.network_handler.get_port())
+            my_username = self.network_handler.username_map.get(my_port)
+            other_username = self.network_handler.username_map.get(self.selected_port)
+
+            if my_username and other_username:
+                # Request fresh history from server using username format
+                self.network_handler.send_message(f"REQUEST_DM_HISTORY:{my_username}:{other_username}")
+
+        # Schedule the next refresh
+        self.root.after(self.dm_refresh_interval, self.refresh_dm_history)
+
+    # ==== Chatting ==== #
     def display_message(self, sender, message, timestamp):
-        self.chat_display.config(state='normal')
-        is_port = sender.isdigit()
+        self.clear_typing_text(sender, context="all")
 
+        self.chat_display.config(state='normal')
+
+        if self.chat_display.index("end-1c") != "1.0":
+            if self.chat_display.get("end-2c", "end-1c") != '\n':
+                self.chat_display.insert(tk.END, "\n")
+
+        is_port = sender.isdigit()
         if sender == "Server":
             self.chat_display.insert(tk.END, f"{sender}: {message}\n", 'server')
-        else:
-            if self.chat_context == "all":
+        elif self.chat_context == "all":
                 # Display username if available, otherwise show "[port]"
                 display_name = sender if not is_port else f"{sender}"
                 self.chat_display.insert(tk.END, f"{display_name}\n", 'username')
@@ -623,21 +790,29 @@ class GUI:
         message = self.message_entry.get()
         if not message or not self.network_handler:
             return
-        self.clear_typing_text("You", context=self.chat_context)
+
+        if isinstance(message, str) and message.upper().startswith(
+                ("REQUEST_DM_HISTORY:", "REQUEST_MY_DM_HISTORY:", "DM:")
+        ):
+            return
+
         self.message_entry.delete(0, tk.END)
+
+        # Tell other clients you have stopped typing by sending an empty typing event.
+        context = 'dm' if self.chat_context == 'dm' else 'all'
+        self.network_handler.send_typing("", context)
+
         timestamp = datetime.now().strftime("%H:%M")
 
-        if self.chat_context == "dm" and self.selected_port: # if DM, send accordingly
-            # add message to local history
+        if self.chat_context == "dm" and self.selected_port:  # if DM, send accordingly
+            # add message to local history immediately
             self.display_dm_message(self.selected_port, "You", message, timestamp)
             # send the message
             self.network_handler.send_message(message, dm_recipient_port=self.selected_port)
-        else: # if not, treat as all chat message
+        else:  # if not, treat as all chat message
             if self.chat_context == 'all':
                 self.display_message("You", message, timestamp)
             self.network_handler.send_message(message)
-
-        self.clear_typing_text("You", context=self.chat_context)
 
     # ==== refresh chats ==== #
     def update_all_chat(self):
@@ -649,6 +824,103 @@ class GUI:
             self.chat_display.insert(tk.END, f"{msg}\n", 'message')
             self.chat_display.insert(tk.END, f"{timestamp}\n\n", 'time')
         self.chat_display.config(state='disabled')
+
+
+    # ==== File transfer methods ==== #
+    def on_file_button(self):
+        if not self.network_handler:
+            return
+        filepath = filedialog.askopenfilename()
+        if not filepath:
+            return
+        filesize = os.path.getsize(filepath)
+        filename = os.path.basename(filepath)
+
+        if self.chat_context == "dm" and self.selected_port:
+            # Send file request to the selected DM recipient
+            self.network_handler.send_file_request(self.selected_port, filename, filesize)
+            self.pending_file = (self.selected_port, filepath, filename, filesize)
+        elif self.chat_context == "all":
+            # Send file request to all clients in the all chat except self
+            my_port = str(self.network_handler.get_port())
+            for port in self.network_handler.username_map:
+                if port != my_port:
+                    self.network_handler.send_file_request(port, filename, filesize)
+            self.pending_file = ("all", filepath, filename, filesize)
+
+    def on_file_request(self, from_port, filename, filesize):
+        # Ask user to accept or reject
+        accept = tk.messagebox.askyesno("File Transfer",
+                                        f"{from_port} wants to send you '{filename}' ({filesize} bytes). Accept?")
+        self.network_handler.send_file_response(from_port, accept)
+        if accept:
+            # FileTransferHandler will handle the TCP connection
+            pass
+
+    def on_file_response(self, to_port, status):
+        if hasattr(self, "pending_file"):
+            pending_file_details = self.pending_file
+
+            if pending_file_details[0] == "all":
+                # If the file was sent to all, we can receive multiple responses
+                _, filepath, filename, _ = pending_file_details
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Error", f"Destination IP ({to_port}) not found.")
+                        return
+                    recipient_file_transfer_listen_port = int(to_port)
+                    print(f"{recipient_file_transfer_listen_port} -> {ip}")
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
+            else:
+                del self.pending_file
+
+                if status == "ACCEPT":
+                    ip = self.network_handler.port_ip_map.get(to_port)
+                    if not ip:
+                        tk.messagebox.showerror("Erro", f"Recipient IP ({to_port}) not found.")
+                        return
+
+                    _, filepath, filename, _ = pending_file_details
+
+                    recipient_file_transfer_listen_port = int(to_port)
+
+                    print(
+                        f"GUI.on_file_response: Starting thread to send {filename} to {ip}:{recipient_file_transfer_listen_port}")
+
+                    send_thread = threading.Thread(
+                        target=self.network_handler.file_transfer_handler.send_file,
+                        args=(ip, recipient_file_transfer_listen_port, filepath),
+                        daemon=True
+                    )
+                    send_thread.start()
+                else:
+                    _, _, filename, _ = pending_file_details
+                    tk.messagebox.showinfo("File Transfer", f"The recipient rejected the file '{filename}'.")
+
+    def ask_file_accept(self, filename, filesize):
+        return tk.messagebox.askyesno("File Transfer", f"Receive file '{filename}' ({filesize} bytes)?")
+
+    def ask_save_path(self, filename):
+        return filedialog.asksaveasfilename(initialfile=filename)
+
+    def notify_file_received(self, filename, path):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' received and saved to {path}")
+
+    def notify_file_sent(self, filename):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' sent successfully.")
+
+    def notify_file_rejected(self, filename):
+        tk.messagebox.showinfo("File Transfer", f"File '{filename}' was rejected by the recipient.")
+
+
+    def notify_file_transfer_error(self, filename, error_message):
+        tk.messagebox.showerror("Erro in File Transfer", f"Error downloading '{filename}': {error_message}")
 
 
     def gen_user_groups(self):
@@ -840,5 +1112,5 @@ class GUI:
 
 
     def manage_group(self):
-        
+
         print("managing group")
