@@ -1,3 +1,7 @@
+# Ignore PyChache directory
+/TUDP/Client/__pycache__/
+
+# Ignore all .log files
 # JetBrains IDE folder
 .idea/
 
@@ -6,16 +10,21 @@
 
 # Log files
 *.log
-# But keep this specific log file
+
+# Except important.log
 !important.log
 
-# Build artifacts
+# Ignore the build directory
 build/
 
-# Temporary files and editor backups
+# Ignore all .tmp files in any directory
 **/*.tmp
-*~
-#*#
 
-# OS-generated files
+# Ignore macOS system files
 .DS_Store
+
+# Ignores all emacs backup files
+*~
+
+# Ignores all emacs autosave files
+\#*#

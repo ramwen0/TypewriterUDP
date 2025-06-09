@@ -13,6 +13,8 @@ class NetworkHandler:
         self.receive_thread = None
         self.gui = None
         self.username_map = {}
+        self.registered_users = {}
+        self.groups_map = {}
 
         self.file_transfer_handler = None
         self.port_ip_map = {}  # Maps ports to IP addresses for file transfers
@@ -77,6 +79,7 @@ class NetworkHandler:
                             self.gui.dms_btn.configure(text="DMs")
                     except ValueError:
                         continue
+
                 # ==== AUTH messages ==== #
                 elif message.startswith("AUTH_RESULT:"):
                     _, status, msg = message.split(":", 2)
@@ -88,6 +91,15 @@ class NetworkHandler:
                             username = msg.split("registered successfully")[-1]
                     if self.gui and hasattr(self.gui, "show_result"):
                         self.gui.show_result(success, msg)
+
+                # === GROUPS messages ===
+                elif message.startswith("GROUPS_RESULT:"):
+                    _, status, msg = message.split(":", 2)
+                    success = status == "OK"
+
+                    if self.gui and hasattr(self.gui, "show_groups_result"):
+                        self.gui.show_groups_result(success, msg)
+
                 # ==== Server messages ==== #
                 elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
@@ -95,6 +107,8 @@ class NetworkHandler:
                             try:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
+
+                                self.gen_all_lists(self.username_map)
                                 self.known_user_map.update(self.username_map)
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
@@ -135,8 +149,34 @@ class NetworkHandler:
 
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list, self.username_map)
+                                self.gen_all_lists(self.username_map)
                             except ValueError:
                                 continue
+                        elif "REGISTERED_USERS:" in message:
+                            try:
+                                self.registered_users = message.split("REGISTERED_USERS:")[1].split(",")
+
+                            except ValueError:
+                                continue
+
+                        elif "[Server] GROUPS_LISTS:" in message:
+                            try:
+                                new_map = {}
+                                groups_info = message.split("GROUPS_LISTS:")[1]
+
+                                for group in groups_info.split(":"):
+                                    group_name, group_owner, group_members = group.split(",", 2)
+                                    new_map[group_name] = {
+                                        "group_owner": group_owner,
+                                        "group_members": group_members}
+
+                                self.groups_map = new_map
+                                print(f"Groups Map: {self.groups_map}")
+
+                            except ValueError:
+                                continue
+
+
                         elif hasattr(self.gui, "display_message"):
                             self.gui.display_message("Server", msg_part[9:], datetime.now().strftime("%H:%M"))
 
@@ -219,6 +259,23 @@ class NetworkHandler:
             msg = f"AUTH:{action}:{username}:{encrypted_password}"
         self.client_socket.sendto(msg.encode(), self.server_address)
 
+    def send_group(self, action, group_name, group_owner, group_member_list):
+        group_member_output = ""
+
+        for user in group_member_list:
+            group_member_output += f"{user},"
+
+        group_member_output = group_member_output[:-1]
+
+        if action == "create":
+            msg = f"GROUPS:{action}:{group_name}:{group_owner}:{group_member_output}"
+            print(msg)
+        elif action == "manage":
+            print("Manage group in database")
+
+        self.client_socket.sendto(msg.encode(), self.server_address)
+
+
     def get_port(self):
         return self.client_socket.getsockname()[1] if self.client_socket else None
 
@@ -237,3 +294,30 @@ class NetworkHandler:
     def send_file_response(self, sender_port, accepted):
         msg = f"FILE_RES:{sender_port}:{'ACCEPT' if accepted else 'REJECT'}"
         self.client_socket.sendto(msg.encode(), self.server_address)
+
+    # === Generates all the lists from the default client_list
+    def gen_all_lists(self, client_list):
+        self.on_users_list = {}
+        self.off_users_list = self.registered_users
+        self.guests_list = {}
+
+        print(f"Client list: {client_list}")
+
+        for port, username in client_list.items():
+            print(f"user port: {port}, username: {username}")
+
+            # Handles if finds a guest
+            if username.startswith("Guest_"):
+                self.guests_list[port] = username
+
+            # Handles if finds a user
+            else:
+                self.on_users_list[port] = username
+
+            # Generate offline users list
+            for port, username in self.on_users_list.items():
+                if username in self.off_users_list:
+                    self.off_users_list.remove(username)
+
+        if hasattr(self.gui, "update_client_list"):
+            self.gui.root.after(0, self.gui.update_client_list)

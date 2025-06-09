@@ -25,6 +25,7 @@ buffer_size = 1024
 clients = {}
 client_users = {} # Track usernames
 clients_lock = threading.RLock()
+all_clients = ""
 
 # server setup
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -32,18 +33,50 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 server_socket.bind((local_IP, local_port))
 print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Server up{Colors.END}")
 
+
 # Initialize database
 def init_database():
     conn = sqlite3.connect("userdata.db")
     cursor = conn.cursor()
-    cursor.execute("""
+
+    enable_foreignkey = """
+        PRAGMA foreign_keys = ON;
+    """
+
+    create_userdata = """
         CREATE TABLE IF NOT EXISTS userdata (
             id INTEGER PRIMARY KEY,
             username VARCHAR(255) NOT NULL,
             password VARCHAR(255) NOT NULL,
             UNIQUE(username)
         )
-    """)
+    """
+
+    create_user_group_owner = """
+        CREATE TABLE IF NOT EXISTS user_group_owner (
+            groupname VARCHAR(255) PRIMARY KEY,
+            username VARCHAR(255) NOT NULL,
+            UNIQUE(groupname)
+        )
+    """
+
+    create_user_group = """
+        CREATE TABLE IF NOT EXISTS user_group (
+            groupname VARCHAR(255),
+            username VARCHAR(255),
+            PRIMARY KEY(groupname, username),
+            FOREIGN KEY(groupname) REFERENCES user_group_owner(groupname)
+                ON DELETE CASCADE ON UPDATE NO ACTION
+        )
+    """
+
+    cursor.execute(enable_foreignkey)
+
+    cursor.execute(create_userdata)
+    cursor.execute(create_user_group_owner)
+    cursor.execute(create_user_group)
+
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dm_histories (
             id INTEGER PRIMARY KEY,
@@ -69,6 +102,7 @@ def init_database():
     conn.close()
     print(f"{Colors.TEXT_LIGHT}{Colors.BG_DARK}Databases initialized{Colors.END}")
 
+
 # Call the initialization function
 init_database()
 
@@ -93,6 +127,11 @@ def periodic_client_updates():
                 client_info = [f"{p}:{client_users.get(p, f'Guest_{p}')}:{clients[p][0]}" for p in clients]
                 client_list = ",".join(client_info)
                 broadcast(f"[Server] CLIENTS:{client_list}")
+
+        gen_all_users()
+        gen_groups_lists()
+
+
 # Start periodic updates thread
 update_thread = threading.Thread(target=periodic_client_updates, daemon=True)
 update_thread.start()
@@ -224,6 +263,111 @@ def get_user_ports(username):
     ports = [row[0] for row in cursor.fetchall()]
     conn.close()
     return ports
+
+
+def handle_groups(message_str, client_ip, client_port):
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+
+    parts = message_str.split(":")
+    action = parts[1]
+
+    if action == "create":
+        group_name = parts[2]
+        group_owner = parts[3]
+        group_members = parts[4]
+
+        group_members_list = [member for member in group_members.split(",")]
+        print(group_members_list)
+
+        verify_group_existence = """
+            SELECT username FROM user_group_owner WHERE groupname = ?
+        """
+
+        cursor.execute(verify_group_existence, (group_name, ))
+        output = cursor.fetchall()
+
+        if output:
+            result = f"GROUPS_RESULT:FAIL:Already exists a group with the name {group_name} owned by {output[0]}"
+        else:
+            insert_group_owner_data = """
+                INSERT INTO user_group_owner (groupname, username) VALUES (?, ?)
+            """
+
+            insert_group_data = """
+                INSERT INTO user_group (groupname, username) VALUES (?, ?)
+            """
+
+            cursor.execute(insert_group_owner_data, (group_name, group_owner))
+            cursor.execute(insert_group_data, (group_name, group_owner))
+
+            if group_members:
+                for member in group_members_list:
+                    cursor.execute(insert_group_data, (group_name, member))
+
+            conn.commit()
+
+            result = f"GROUPS_RESULT:OK:Created successfully the group, {group_name}"
+
+
+    elif action == "manage":
+        print("Handling group action manage")
+
+    conn.close()
+    server_socket.sendto(result.encode(), (client_ip, client_port))
+
+
+# Generate a message with all registered clients on database
+def gen_all_users():
+    all_clients = []
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+
+    get_all_users = """
+        SELECT username FROM userdata
+    """
+
+    cursor.execute(get_all_users)
+
+    result = cursor.fetchall()
+
+    users = ""
+
+    for user in result:
+        users += f"{user[0]},"
+
+    users = users[:-1]
+
+    conn.close()
+
+    broadcast(f"[Server] REGISTERED_USERS:{users}")
+
+
+def gen_groups_lists():
+    groups_info = f"[Server] GROUPS_LISTS"
+
+    conn = sqlite3.connect("userdata.db")
+    cursor = conn.cursor()
+
+    get_group_info = """
+        SELECT o.groupname,
+               o.username owner,
+               GROUP_CONCAT(m.username) members
+        FROM user_group_owner o
+        LEFT JOIN user_group m ON o.groupname = m.groupname
+        GROUP BY o.groupname
+    """
+
+    cursor.execute(get_group_info)
+
+    for group_name, group_owner, group_members in cursor.fetchall():
+        groups_info += f":{group_name},{group_owner},{group_members}"
+        #print(f"Group: {group_name}, Owner: {group_owner}, All Members: {group_members}")
+
+    print(groups_info)
+
+    broadcast(groups_info)
+
 
 while True:
     try:
@@ -385,6 +529,11 @@ while True:
                                          (clients[sender_port][0], sender_port))
             except Exception as e:
                 print("File res error:", e)
+            continue
+
+        # Handles Groups
+        if message_str.startswith("GROUPS:"):
+            handle_groups(message_str, client_ip, client_port)
             continue
 
         # Broadcast regular messages with sender info
