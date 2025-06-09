@@ -46,8 +46,27 @@ class NetworkHandler:
                         message.startswith("DM:")
                 ):
                     continue  # Ignore these messages in the UI
+                if message.startswith("GROUP_MSG_IN:"):
+                    try:
+                        _, group_name, sender, content = message.split(":", 3)
+                        if self.gui and hasattr(self.gui, "display_group_message"):
+                            # Use a full timestamp for sorting
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+                            self.gui.root.after(0, self.gui.display_group_message, group_name, sender, content,
+                                                timestamp)
+                    except ValueError:
+                        continue
+
+                elif message.startswith("GROUP_HISTORY_MSG:"):
+                    try:
+                        _, group_name, sender, content, timestamp = message.split(":", 4)
+                        if self.gui and hasattr(self.gui, "process_group_history"):
+                            self.gui.root.after(0, self.gui.process_group_history, group_name, sender, content,
+                                                timestamp)
+                    except ValueError:
+                        continue
                 # ==== DM history ==== #
-                if message.startswith("DM_HISTORY:"):  # Keep processing history responses
+                elif message.startswith("DM_HISTORY:"):  # Keep processing history responses
                     try:
                         _, sender, recipient, content, timestamp = message.split(":", 4)
                         if self.gui and hasattr(self.gui, "process_dm_history"):
@@ -103,78 +122,74 @@ class NetworkHandler:
                 # ==== Server messages ==== #
                 elif message.startswith("[Server]"):
                     for msg_part in message.split("\n"):
+                        if not msg_part.strip():
+                            continue
+
+                        # Handle USERNAME assignment
                         if msg_part.startswith("[Server] USERNAME:"):
                             try:
                                 _, port, username = msg_part[9:].split(":")
                                 self.username_map[port] = username
-
-                                self.gen_all_lists(self.username_map)
                                 self.known_user_map.update(self.username_map)
                                 if hasattr(self.gui, "update_client_list"):
                                     self.gui.root.after(0, self.gui.update_client_list)
                             except ValueError:
-                                continue
-                        elif "CLIENTS:" in message:
+                                pass
+                            continue  # ADDED: Stop processing this line
+
+                        # Handle CLIENTS list
+                        elif "CLIENTS:" in msg_part:  # FIXED: Check msg_part, not message
                             try:
-                                client_info = message.split("CLIENTS:")[1].split(",")
-                                new_map = {}
-                                new_ip_map = {}
+                                client_info = msg_part.split("CLIENTS:")[1].split(",")
+                                new_map, new_ip_map = {}, {}
                                 for entry in client_info:
-                                    if not entry:  # Skip empty entries if the list ends with a comma
-                                        continue
-
-                                    # Split port:username:ip
+                                    if not entry: continue
                                     parts = entry.split(":")
-
-                                    if len(parts) < 2:
-                                        continue
-
-                                    port = parts[0]
-                                    username = parts[1]
-
-                                    if not username:
-                                        username = f"Guest_{port}"
-
+                                    if len(parts) < 2: continue
+                                    port, username = parts[0], parts[1]
+                                    if not username: username = f"Guest_{port}"
                                     new_map[port] = username
+                                    if len(parts) > 2: new_ip_map[port] = parts[2]
 
-                                    if len(parts) > 2:
-                                        ip = parts[2]
-                                        new_ip_map[port] = ip
-
-                                self.username_map = new_map  # Replace completely rather than update
-
-                                self.port_ip_map = new_ip_map  # Update IP map
-
+                                self.username_map = new_map
+                                self.port_ip_map = new_ip_map
                                 self.known_user_map.update(new_map)
-
-                                if hasattr(self.gui, "update_client_list"):
-                                    self.gui.root.after(0, self.gui.update_client_list)
                                 self.gen_all_lists(self.username_map)
-                            except ValueError:
-                                continue
-                        elif "REGISTERED_USERS:" in message:
-                            try:
-                                self.registered_users = message.split("REGISTERED_USERS:")[1].split(",")
+                            except (ValueError, IndexError):
+                                pass
+                            continue  # ADDED: Stop processing this line
 
-                            except ValueError:
-                                continue
-
-                        elif "[Server] GROUPS_LISTS:" in message:
+                        # Handle REGISTERED_USERS list
+                        elif "REGISTERED_USERS:" in msg_part:  # FIXED: Check msg_part, not message
                             try:
+                                self.registered_users = msg_part.split("REGISTERED_USERS:")[1].split(",")
+                            except (ValueError, IndexError):
+                                pass
+                            continue  # ADDED: Stop processing this line
+
+                        # Handle GROUPS_LISTS
+                        elif "GROUPS_LISTS:" in msg_part:  # FIXED: Check msg_part, not message
+                            try:
+                                # ... (your existing group list parsing logic) ...
+                                # This part is complex, but the key is the 'continue' at the end
                                 new_map = {}
-                                groups_info = message.split("GROUPS_LISTS:")[1]
-
-                                for group in groups_info.split(":"):
-                                    group_name, group_owner, group_members = group.split(",", 2)
-                                    new_map[group_name] = {
-                                        "group_owner": group_owner,
-                                        "group_members": group_members}
-
+                                groups_info_str = msg_part.split("GROUPS_LISTS", 1)[1]
+                                if groups_info_str.startswith(':'):
+                                    groups_info_str = groups_info_str[1:]
+                                if groups_info_str:
+                                    for group_data in groups_info_str.split(":"):
+                                        if not group_data: continue
+                                        parts = group_data.split(",", 2)
+                                        if len(parts) == 3:
+                                            group_name, group_owner, group_members = parts
+                                            new_map[group_name] = {"group_owner": group_owner,
+                                                                   "group_members": group_members}
                                 self.groups_map = new_map
-                                print(f"Groups Map: {self.groups_map}")
-
-                            except ValueError:
-                                continue
+                                if hasattr(self.gui, "gen_user_groups"):
+                                    self.gui.root.after(0, self.gui.gen_user_groups)
+                            except (ValueError, IndexError):
+                                pass
+                            continue  # ADDED: Stop processing this line
 
 
                         elif hasattr(self.gui, "display_message"):
@@ -335,3 +350,21 @@ class NetworkHandler:
             if self.gui and hasattr(self.gui, 'root') and self.gui.root.winfo_exists():
                 self.gui.root.after(0, self.gui.update_client_list)
 
+    # Group chat methods
+    def send_group_message(self, group_name, message):
+        """Sends a chat message to a specific group."""
+        try:
+            msg = f"GROUP_MSG:{group_name}:{message}"
+            self.client_socket.sendto(msg.encode(), self.server_address)
+        except socket.error as e:
+            if self.gui:
+                self.gui.display_message("System", f"Failed to send group message: {e}", "Error")
+
+    def request_group_history(self, group_name):
+        """Requests the chat history for a specific group from the server."""
+        try:
+            msg = f"REQUEST_GROUP_HISTORY:{group_name}"
+            self.client_socket.sendto(msg.encode(), self.server_address)
+        except socket.error as e:
+            if self.gui:
+                self.gui.display_message("System", f"Failed to request group history: {e}", "Error")
